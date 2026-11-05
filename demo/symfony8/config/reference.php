@@ -419,7 +419,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         enabled?: bool|Param, // Default: false
  *     },
  *     lock?: Param|bool|string|array{ // Lock configuration
- *         enabled?: bool|Param, // Default: false
+ *         enabled?: bool|Param, // Default: true
  *         resources?: Param|string|array<string, Param|string|list<scalar|Param|null>>,
  *     },
  *     semaphore?: Param|bool|string|array{ // Semaphore configuration
@@ -1639,9 +1639,10 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         events_enabled?: bool|Param, // Default: false
  *         max_body_bytes?: int|Param, // Default: 1048576
  *         max_skew_seconds?: int|Param, // Default: 300
- *         replay_cache_pool?: scalar|Param|null, // Default: "cache.app"
+ *         replay_lock_factory?: scalar|Param|null, // symfony/lock LockFactory service of the atomic replay memory; use a Redis or DBAL store in production (local stores fail the build outside debug and test). // Default: "lock.factory"
  *         max_secret_candidates?: int|Param, // Default: 2
  *         signing_secret_resolver?: scalar|Param|null, // Service id implementing SigningSecretResolverInterface. // Default: null
+ *         resolver_actors?: bool|Param, // Resolve actors for clicks verified with a host secret bound to the click workspace (ResolvedSigningSecret). Trusts every holder of every such secret. // Default: false
  *         async?: bool|Param, // Dispatch Events API callbacks to Messenger (requires symfony/messenger). // Default: false
  *         transport?: scalar|Param|null, // Default: "async"
  *     },
@@ -1650,7 +1651,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         previous_secrets?: list<scalar|Param|null>,
  *         legacy_value_key?: scalar|Param|null, // Key of the action name in legacy unsigned JSON values (Beacon: a). // Default: null
  *         legacy_action_map?: array<string, scalar|Param|null>,
- *         legacy_until?: scalar|Param|null, // ISO-8601 UTC instant; legacy values are refused from then on. // Default: null
+ *         legacy_until?: scalar|Param|null, // Strict ISO-8601 UTC instant (2026-12-05T00:00:00Z) or %env()%; legacy values are refused from then on. Anything else disables legacy mode. // Default: null
  *     },
  *     linking?: array{
  *         enabled?: bool|Param, // Default: false
@@ -1686,6 +1687,7 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     },
  *     rate_limit?: array{
  *         max_retry_after?: int|Param, // Default: 300
+ *         max_attempts?: int|Param, // Deliveries of a rate-limited Messenger message before the retry middleware gives up. // Default: 3
  *     },
  *     notifier?: array{
  *         enabled?: bool|Param, // Default: false

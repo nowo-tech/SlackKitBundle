@@ -7,6 +7,7 @@ namespace Nowo\SlackKitBundle\Api;
 use InvalidArgumentException;
 use Nowo\SlackKitBundle\BlockKit\BlockKitLimitException;
 use Nowo\SlackKitBundle\BlockKit\Blocks;
+use Nowo\SlackKitBundle\BlockKit\Mrkdwn;
 
 use function array_values;
 use function count;
@@ -15,7 +16,8 @@ use function trim;
 /**
  * A message for `chat.postMessage`, `chat.update`, `chat.postEphemeral` or an incoming webhook: the fallback text
  * (required by Slack for notifications and screen readers) and the Block Kit blocks. Link and media unfurling are off
- * by default.
+ * by default. The fallback text is mrkdwn-escaped (`&`, `<`, `>`) when sent, so user data cannot ping `<!channel>` or
+ * disguise a link (audit FS-L3); pass `rawText: true` only for text built with {@see Mrkdwn}.
  */
 final readonly class SlackMessage
 {
@@ -28,6 +30,7 @@ final readonly class SlackMessage
      * @param bool $unfurlLinks let Slack unfurl links
      * @param bool $unfurlMedia let Slack unfurl media
      * @param string|null $threadTs reply in this thread
+     * @param bool $rawText send the fallback text as is (already escaped mrkdwn)
      *
      * @throws InvalidArgumentException when the text is empty
      * @throws BlockKitLimitException when there are more than 50 blocks
@@ -38,6 +41,7 @@ final readonly class SlackMessage
         public bool $unfurlLinks = false,
         public bool $unfurlMedia = false,
         public ?string $threadTs = null,
+        public bool $rawText = false,
     ) {
         if (trim($text) === '') {
             throw new InvalidArgumentException('A Slack message needs a fallback text.');
@@ -63,7 +67,8 @@ final readonly class SlackMessage
      */
     public function toArguments(): array
     {
-        $arguments = ['text' => Blocks::truncate($this->text, Blocks::MAX_FALLBACK_TEXT), 'unfurl_links' => $this->unfurlLinks, 'unfurl_media' => $this->unfurlMedia];
+        $text      = Blocks::truncate($this->text, Blocks::MAX_FALLBACK_TEXT);
+        $arguments = ['text' => $this->rawText ? $text : Mrkdwn::escape($text), 'unfurl_links' => $this->unfurlLinks, 'unfurl_media' => $this->unfurlMedia];
         if ($this->blocks !== []) {
             $arguments['blocks'] = $this->blocks;
         }

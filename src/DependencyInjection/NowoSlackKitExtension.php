@@ -6,7 +6,6 @@ namespace Nowo\SlackKitBundle\DependencyInjection;
 
 use DateInterval;
 use DateTimeImmutable;
-use Exception;
 use LogicException;
 use Nowo\FormKitBundle\Form\CsrfOnlyFormFactory;
 use Nowo\InstanceSettingsBundle\NowoInstanceSettingsBundle;
@@ -58,12 +57,15 @@ use Symfony\Component\DependencyInjection\Extension\Extension;
 use Symfony\Component\DependencyInjection\Extension\PrependExtensionInterface;
 use Symfony\Component\DependencyInjection\ParameterBag\EnvPlaceholderParameterBag;
 use Symfony\Component\DependencyInjection\Reference;
+use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Notifier\Transport\TransportFactoryInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\CacheStorage;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 use function array_values;
+use function in_array;
 use function interface_exists;
 use function is_bool;
 use function is_string;
@@ -79,6 +81,9 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
 {
     /** Service id of the rate-limit retry middleware. */
     public const RETRY_MIDDLEWARE = 'nowo_slack_kit.messenger.rate_limit_retry';
+
+    /** Service id of the logger-free HttpClient of incoming webhooks. */
+    public const WEBHOOK_HTTP_CLIENT = 'nowo_slack_kit.webhook_http_client';
 
     /** Service id of the button key. */
     public const BUTTON_KEY = 'nowo_slack_kit.button_key';
@@ -120,7 +125,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
      */
     public function load(array $configs, ContainerBuilder $container): void
     {
-        /** @var array{default_locale: string, api: array{timeout: float, max_duration: float, max_response_bytes: int}, default_app: string, apps: array<string, array{app_id: string|null, signing_secret: string|null}>, credentials: array{store: string, settings_section: string}, ingress: array{enabled: bool, prefix: string, interactions_path: string|null, events_path: string|null, events_enabled: bool, max_body_bytes: int, max_skew_seconds: int, replay_cache_pool: string, max_secret_candidates: int, signing_secret_resolver: string|null, async: bool, transport: string}, interactions: array{value_ttl: string, previous_secrets: list<string>, legacy_value_key: string|null, legacy_action_map: array<string, string>, legacy_until: string|null}, linking: array{enabled: bool, identity_store: string|null, account_resolver: string|null, claim_ttl: string, confirmation_ttl: string, email_lookup: bool, return_route: string|null, claim_per_account: array{limit: int, interval: string}, email_lookup_per_account: array{limit: int, interval: string}, confirmation_per_account: array{limit: int, interval: string}, confirmation_per_target: array{limit: int, interval: string}}, test_connection: array{enabled: bool, rate_limit: array{limit: int, interval: string}}, rate_limit: array{max_retry_after: int}, notifier: array{enabled: bool}, ui: array{prefix: string}} $config */
+        /** @var array{default_locale: string, api: array{timeout: float, max_duration: float, max_response_bytes: int}, default_app: string, apps: array<string, array{app_id: string|null, signing_secret: string|null}>, credentials: array{store: string, settings_section: string}, ingress: array{enabled: bool, prefix: string, interactions_path: string|null, events_path: string|null, events_enabled: bool, max_body_bytes: int, max_skew_seconds: int, replay_lock_factory: string, max_secret_candidates: int, signing_secret_resolver: string|null, resolver_actors: bool, async: bool, transport: string}, interactions: array{value_ttl: string, previous_secrets: list<string>, legacy_value_key: string|null, legacy_action_map: array<string, string>, legacy_until: string|null}, linking: array{enabled: bool, identity_store: string|null, account_resolver: string|null, claim_ttl: string, confirmation_ttl: string, email_lookup: bool, return_route: string|null, claim_per_account: array{limit: int, interval: string}, email_lookup_per_account: array{limit: int, interval: string}, confirmation_per_account: array{limit: int, interval: string}, confirmation_per_target: array{limit: int, interval: string}}, test_connection: array{enabled: bool, rate_limit: array{limit: int, interval: string}}, rate_limit: array{max_retry_after: int, max_attempts: int}, notifier: array{enabled: bool}, ui: array{prefix: string}} $config */
         $config = $this->processConfiguration(new Configuration(), $configs);
         $this->assertLiteralBooleans($config);
         $this->assertSecretsFromEnvironment($container, $config);
@@ -164,7 +169,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
                 ->addTag('chatter.transport_factory'));
         }
         if (interface_exists($this->messageBusInterface)) {
-            $container->setDefinition(self::RETRY_MIDDLEWARE, new Definition(RateLimitRetryMiddleware::class));
+            $container->setDefinition(self::RETRY_MIDDLEWARE, new Definition(RateLimitRetryMiddleware::class, [$config['rate_limit']['max_attempts']]));
         }
     }
 
@@ -205,7 +210,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
      */
     private function registerClient(ContainerBuilder $container, array $config): void
     {
-        /* @var array{default_app: string, apps: array<string, array{app_id: string|null, signing_secret: string|null}>, api: array{timeout: float, max_duration: float, max_response_bytes: int}, rate_limit: array{max_retry_after: int}} $config */
+        /* @var array{default_app: string, apps: array<string, array{app_id: string|null, signing_secret: string|null}>, api: array{timeout: float, max_duration: float, max_response_bytes: int}, rate_limit: array{max_retry_after: int, max_attempts: int}} $config */
         $container->setDefinition(SlackAppRegistry::class, new Definition(SlackAppRegistry::class, [
             $config['default_app'],
             $config['apps'],
@@ -228,8 +233,10 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
             new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE),
         ]))->addTag('monolog.logger', ['channel' => 'slack']));
         $container->setAlias(SlackApiClientInterface::class, SlackApiClient::class)->setPublic(true);
+        // Audit FS-L2: the webhook URL is a bearer secret; its client has no logger and is not traced by the profiler.
+        $container->setDefinition(self::WEBHOOK_HTTP_CLIENT, (new Definition(HttpClientInterface::class))->setFactory([HttpClient::class, 'create']));
         $container->setDefinition(IncomingWebhookClient::class, (new Definition(IncomingWebhookClient::class, [
-            new Reference('http_client'),
+            new Reference(self::WEBHOOK_HTTP_CLIENT),
             new Reference(ApiPolicy::class),
         ]))->setPublic(true));
     }
@@ -241,7 +248,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
     {
         /** @var array{default_locale: string, interactions: array{value_ttl: string, previous_secrets: list<string>, legacy_value_key: string|null, legacy_action_map: array<string, string>, legacy_until: string|null}, linking: array{enabled: bool, identity_store: string|null}} $config */
         $interactions = $config['interactions'];
-        $container->setDefinition(self::BUTTON_KEY, (new Definition())->setClass(SlackSecret::class)->setFactory([ButtonValueCodec::class, 'deriveKey'])->setArguments(['%kernel.secret%']));
+        $container->setDefinition(self::BUTTON_KEY, (new Definition())->setClass(SlackSecret::class)->setFactory([ButtonValueCodec::class, 'deriveCheckedKey'])->setArguments(['%kernel.secret%', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE)]));
         $previous = [];
         foreach (array_values($interactions['previous_secrets']) as $i => $secret) {
             $id = self::BUTTON_KEY . '.previous.' . $i;
@@ -257,18 +264,19 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
 
         $until = null;
         if ($interactions['legacy_until'] !== null) {
-            // An %env()% placeholder is parsed at runtime (an empty value means "now": legacy mode off).
-            try {
-                if (!$this->isEnvPlaceholder($container, $interactions['legacy_until'])) {
-                    new DateTimeImmutable($interactions['legacy_until']);
-                }
-            } catch (Exception) {
-                throw new InvalidConfigurationException('nowo_slack_kit.interactions.legacy_until must be an ISO-8601 instant.');
+            // Audit FS-L4: a strict UTC instant only (a relative string would roll forward on every boot). An
+            // %env()% value is parsed at runtime by the same rule; anything else there turns legacy mode off.
+            if (!$this->isEnvPlaceholder($container, $interactions['legacy_until']) && !LegacyValuePolicy::parseUntil($interactions['legacy_until']) instanceof DateTimeImmutable) {
+                throw new InvalidConfigurationException('nowo_slack_kit.interactions.legacy_until must be a UTC instant such as 2026-12-05T00:00:00Z.');
             }
-            $until = new Definition(DateTimeImmutable::class, [$interactions['legacy_until']]);
+            $until = $interactions['legacy_until'];
+        }
+        if (in_array(AccountLinker::CONFIRM_ACTION, $interactions['legacy_action_map'], true)) {
+            // Audit FS-I4: confirmations are bound to the claim time; unsigned ones are never accepted.
+            throw new InvalidConfigurationException('nowo_slack_kit.interactions.legacy_action_map cannot map to nowo_slack_kit.link.confirm.');
         }
         $key = $interactions['legacy_value_key'];
-        if ($key !== null && (!$until instanceof Definition || $interactions['legacy_action_map'] === [])) {
+        if ($key !== null && ($until === null || $interactions['legacy_action_map'] === [])) {
             throw new InvalidConfigurationException('nowo_slack_kit.interactions.legacy_value_key needs legacy_until and legacy_action_map (legacy mode is always time-boxed).');
         }
         $container->setParameter('nowo_slack_kit.interactions.legacy_action_map', $key !== null ? $interactions['legacy_action_map'] : []);
@@ -310,7 +318,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
      */
     private function registerIngress(ContainerBuilder $container, array $config): array
     {
-        /** @var array{ingress: array{enabled: bool, prefix: string, interactions_path: string|null, events_path: string|null, events_enabled: bool, max_body_bytes: int, max_skew_seconds: int, replay_cache_pool: string, max_secret_candidates: int, signing_secret_resolver: string|null, async: bool, transport: string}} $config */
+        /** @var array{ingress: array{enabled: bool, prefix: string, interactions_path: string|null, events_path: string|null, events_enabled: bool, max_body_bytes: int, max_skew_seconds: int, replay_lock_factory: string, max_secret_candidates: int, signing_secret_resolver: string|null, resolver_actors: bool, async: bool, transport: string}} $config */
         $ingress = $config['ingress'];
         $prefix  = '/' . trim($ingress['prefix'], '/');
         $paths   = [
@@ -326,7 +334,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
         }
 
         $container->setDefinition(SignatureVerifier::class, new Definition(SignatureVerifier::class, [new Reference('clock'), $ingress['max_skew_seconds']]));
-        $container->setDefinition(ReplayGuard::class, new Definition(ReplayGuard::class, [new Reference($ingress['replay_cache_pool']), $ingress['max_skew_seconds'], '%kernel.environment%', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE)]));
+        $container->setDefinition(ReplayGuard::class, new Definition(ReplayGuard::class, [new Reference($ingress['replay_lock_factory']), $ingress['max_skew_seconds'], null, false]));
         $events = (new Definition(EventsHandler::class, [
             new Reference(SlackInstallationStoreInterface::class),
             new Reference('event_dispatcher'),
@@ -350,6 +358,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
             $ingress['max_body_bytes'],
             $ingress['max_secret_candidates'],
             new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE),
+            $ingress['resolver_actors'],
         ]))
             ->addTag('monolog.logger', ['channel' => 'slack'])
             ->setAutoconfigured(false)

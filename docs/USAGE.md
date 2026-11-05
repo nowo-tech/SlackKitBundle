@@ -19,6 +19,7 @@
   - [Linker API](#linker-api)
 - [Settings section and Test connection](#settings-section-and-test-connection)
 - [Installation stores](#installation-stores)
+  - [Testing your installation store](#testing-your-installation-store)
 - [Notifier transport](#notifier-transport)
 - [Events reference](#events-reference)
 - [Twig functions](#twig-functions)
@@ -45,8 +46,11 @@ $user    = $slack->lookupUserByEmail($key, 'someone@example.test');             
 $auth    = $slack->authTest($key);                                                   // team, teamId, user, userId, botId
 ```
 
-- `SlackMessage($text, $blocks = [], $unfurlLinks = false, $unfurlMedia = false, $threadTs = null)`: the fallback
-  `text` is required (Slack accessibility rule; empty text throws); unfurling is off by default.
+- `SlackMessage($text, $blocks = [], $unfurlLinks = false, $unfurlMedia = false, $threadTs = null, $rawText = false)`:
+  the fallback `text` is required (Slack accessibility rule; empty text throws); unfurling is off by default. The
+  fallback text is **mrkdwn-escaped** (`&`, `<`, `>`) when sent (after truncation), so user data such as an issue
+  title `<!channel>` cannot ping a channel or disguise a link in the notification. Pass `rawText: true` only for text
+  built with `Mrkdwn::escape()` / `Mrkdwn::link()` / `Mrkdwn::mention()`.
 - `SlackUserId`, `SlackTeamId`, `SlackChannelId` are validated value objects (`fromString()` throws, `tryFrom()`
   returns `null`), so a malformed id never reaches Slack.
 - `lookupUserByEmail()` throws `EmailLookupDisabledException` unless the installation allows it (setting
@@ -56,7 +60,7 @@ $auth    = $slack->authTest($key);                                              
 
 | Outcome | Exception |
 | --- | --- |
-| Transport error or timeout | `SlackApiException('transport_error')` |
+| Transport error or timeout | `SlackApiException('transport_error')`; its `previous` is a `RedactedTransportException` (class and `SecretRedactor`-redacted message of the HttpClient failure, no further chain) |
 | Response over `api.max_response_bytes` | `SlackApiException('response_too_large')` |
 | Body not a JSON object | `SlackApiException('invalid_response')` |
 | `ok: false` | `SlackApiException(<error>)` (`unknown_error` when the code does not match `^[a-z0-9_]{1,64}$`) |
@@ -80,7 +84,9 @@ $webhooks->post(SlackSecret::webhookUrl($destination->webhookUrl()), $message);
 ```
 
 Only `https://hooks.slack.com/services/…` URLs are accepted (exact host, path pattern, no redirects). Keep the URL
-encrypted at rest: anyone holding it can post to the channel.
+encrypted at rest: anyone holding it can post to the channel. The client uses its own HttpClient
+(`nowo_slack_kit.webhook_http_client`) with no logger and no profiler tracing, so the URL never reaches the
+`http_client` log or the profiler, and a transport error never carries it.
 
 ## Building messages (Block Kit and mrkdwn)
 
@@ -192,6 +198,8 @@ When channel messages are posted through customers' own Slack apps (incoming web
 app's secret. Implement `SigningSecretResolverInterface` and set `ingress.signing_secret_resolver`:
 
 ```php
+use Nowo\SlackKitBundle\Id\SlackTeamId;
+use Nowo\SlackKitBundle\Ingress\ResolvedSigningSecret;
 use Nowo\SlackKitBundle\Ingress\SigningSecretResolverInterface;
 use Nowo\SlackKitBundle\Ingress\UnverifiedPayloadPeek;
 use Nowo\SlackKitBundle\Security\SlackSecret;
@@ -201,17 +209,34 @@ final readonly class DestinationSecretResolver implements SigningSecretResolverI
     public function candidates(UnverifiedPayloadPeek $peek): iterable
     {
         $id = $peek->actionDataString('d', '/^[0-9a-f-]{36}$/');   // unverified: only chooses which secret to try
-        $secret = $id !== null ? $this->destinations->signingSecretOf($id) : null;
-        if ($secret !== null) {
-            yield SlackSecret::signingSecret($secret);
+        $destination = $id !== null ? $this->destinations->find($id) : null;
+        if ($destination !== null) {
+            // A plain SlackSecret is enough; bind the workspace only if you opt in to resolver actors.
+            yield new ResolvedSigningSecret(
+                SlackSecret::signingSecret($destination->signingSecret()),
+                SlackTeamId::tryFrom($destination->slackTeamId()),   // e.g. T00000000, or null when unknown
+            );
         }
     }
 }
 ```
 
 The peek exposes only string fields of the first action's data that match your pattern; at most
-`ingress.max_secret_candidates` secrets are tried and every failure gives the same 401. Clicks verified this way skip
-the installation workspace check (the secret scopes them) and carry `verifiedByResolver: true`.
+`ingress.max_secret_candidates` secrets are tried and every failure gives the same 401. Candidates are `SlackSecret`
+or `ResolvedSigningSecret` objects.
+
+Clicks verified this way skip the installation workspace check and carry `verifiedByResolver: true`. Whoever holds
+such a secret (the customer's Slack app, its admins, whoever pasted it) can sign **any** `team.id` and `user.id`, so:
+
+- the click gets **no actor**: handlers with `requiresActor: true` answer 403 *Link and confirm…*; handlers with
+  `requiresActor: false` run and must authorise from their own verified data (the `nsk1` value, the destination);
+- legacy unsigned values are refused (403 *This button is no longer valid*), even inside the legacy window;
+- the built-in link confirmation refuses it.
+
+Opt-in: with `ingress.resolver_actors: true`, an actor is resolved when the verifying candidate was a
+`ResolvedSigningSecret` bound to a workspace and the click's `team.id` equals it. This trusts every holder of every
+such secret to act as any linked member of that workspace; enable it only when those secrets are held by your
+operators alone.
 
 ## Events API
 
@@ -223,7 +248,8 @@ Enable `ingress.events_enabled`, add the Events URL (`nowo_slack_kit_ingress_url
   `SlackInstallationRevokedEvent`;
 - every `event_callback` is dispatched as `SlackEventReceivedEvent` (installation key, `eventId`, `eventTime`, `type`,
   decoded `event`), inline or through Messenger with `ingress.async: true`;
-- Slack retries of the same `event_id` within an hour answer 200 and are dropped;
+- Slack retries of the same `event_id` within an hour answer 200 and are dropped; when handling fails (inline
+  listener or Messenger dispatch) the claim is released and the endpoint answers 500, so Slack's retry is handled;
 - `app_rate_limited` dispatches `SlackEventsRateLimitedEvent`.
 
 ```php
@@ -336,6 +362,35 @@ multi-tenant hosts and set `credentials.store` to its service id. Return `SlackS
 key, encrypt at rest ([SECURITY.md](SECURITY.md#installation-store-contract)). `InMemoryInstallationStore` is for
 tests and demos (fake values only).
 
+### Testing your installation store
+
+The store contract ships as an abstract PHPUnit test case (requires `phpunit/phpunit` in your dev dependencies).
+Extend it and return your store seeded with one installation of the default app in workspace `T00000000`, bot token
+`xoxb-test-not-a-real-token` and signing secret `testsigningsecretnotreal00000000` (the class constants):
+
+```php
+use Nowo\SlackKitBundle\Credentials\SlackInstallationStoreInterface;
+use Nowo\SlackKitBundle\Test\SlackInstallationStoreContractTestCase;
+
+final class DoctrineSlackStoreContractTest extends SlackInstallationStoreContractTestCase
+{
+    protected function createStore(): SlackInstallationStoreInterface
+    {
+        // Seed self::TEAM, self::BOT_TOKEN and self::SIGNING_SECRET into a fresh test database.
+        return $this->seededStore();
+    }
+
+    protected function rawStorage(): ?string
+    {
+        return $this->dumpRows();   // optional: proves the token and secret are not stored in clear
+    }
+}
+```
+
+It checks that `find()` returns `SlackSecret` objects, that reads are scoped to the key, that `markRevoked()` is
+idempotent and leaves no usable installation, and, when `rawStorage()` returns the backend contents, that no secret
+is stored in clear. The bundle runs it against `InMemoryInstallationStore` and `InstanceSettingsInstallationStore`.
+
 ## Notifier transport
 
 ```yaml
@@ -357,7 +412,8 @@ $sent    = $chatter->send($message);   // getMessageId() = "C00000001:<ts>"
 ```
 
 The DSN never holds a secret (credentials in the DSN are refused); the token comes from the store. A `SlackUserId`
-recipient opens a DM first. The scheme is `nowo-slack`, so `symfony/slack-notifier` can coexist.
+recipient opens a DM first. The `ChatMessage` subject becomes the fallback text and is mrkdwn-escaped like any
+`SlackMessage` text. The scheme is `nowo-slack`, so `symfony/slack-notifier` can coexist.
 
 ## Events reference
 

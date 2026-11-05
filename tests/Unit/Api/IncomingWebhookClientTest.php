@@ -6,12 +6,14 @@ namespace Nowo\SlackKitBundle\Tests\Unit\Api;
 
 use Nowo\SlackKitBundle\Api\ApiPolicy;
 use Nowo\SlackKitBundle\Api\IncomingWebhookClient;
+use Nowo\SlackKitBundle\Api\RedactedTransportException;
 use Nowo\SlackKitBundle\Api\SlackApiException;
 use Nowo\SlackKitBundle\Api\SlackMessage;
 use Nowo\SlackKitBundle\Api\SlackRateLimitedException;
 use Nowo\SlackKitBundle\Security\SlackSecret;
 use Nowo\SlackKitBundle\Tests\Support\Fake;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\HttpClient\Exception\TransportException;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
@@ -47,6 +49,25 @@ final class IncomingWebhookClientTest extends TestCase
             } catch (SlackApiException $e) {
                 self::assertSame($code, $e->errorCode);
             }
+        }
+    }
+
+    public function testTransportFailuresNeverCarryTheWebhookUrl(): void
+    {
+        // Audit FS-L2 PoC: the HttpClient message names the URL; the bundle keeps only a redacted copy.
+        $http = new MockHttpClient(static fn (): MockResponse => throw new TransportException('Failed to connect to hooks.slack.com for "' . Fake::WEBHOOK . '".'));
+        try {
+            (new IncomingWebhookClient($http, new ApiPolicy()))->post(SlackSecret::webhookUrl(Fake::WEBHOOK), SlackMessage::plain('x'));
+            self::fail('accepted');
+        } catch (SlackApiException $e) {
+            self::assertSame('Slack API error: transport_error', $e->getMessage());
+            $previous = $e->getPrevious();
+            self::assertInstanceOf(RedactedTransportException::class, $previous);
+            self::assertNull($previous->getPrevious());
+            self::assertStringNotContainsString('fakefakefakefakefake', $previous->getMessage());
+            self::assertStringNotContainsString('TFAKE0000', $previous->getMessage());
+            self::assertStringContainsString('TransportException', $previous->getMessage());
+            self::assertStringNotContainsString('fakefake', (string) json_encode([(string) $e, $e->getTraceAsString()]));
         }
     }
 

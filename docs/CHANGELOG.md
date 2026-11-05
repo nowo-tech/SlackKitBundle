@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format follows
 
 - [[Unreleased]](#unreleased)
   - [Added](#added)
+  - [Security (REQ-SEC-004 audit, appendix FS)](#security-req-sec-004-audit-appendix-fs)
   - [Interim decisions (aligned with symfony-beacon 1.122.1)](#interim-decisions-aligned-with-symfony-beacon-11221)
   - [Notes / deviations from contract v1.1](#notes--deviations-from-contract-v11)
 
@@ -39,16 +40,18 @@ a Block Kit builder and an optional Notifier chat transport. Built from contract
   `ingress.events_enabled`, `POST {prefix}/events[/{app}]`; stateless routes. Checks in order: content type (415), body
   cap before parsing (413), header shapes and timestamp window (`max_skew_seconds` ≤ 300, `ClockInterface`), signing
   secret of the app, optional host `SigningSecretResolverInterface` candidates over a bounded `UnverifiedPayloadPeek`
-  (at most `max_secret_candidates`), HMAC v0 with `hash_equals`, replay memory, JSON decode, then workspace
+  (at most `max_secret_candidates`; plain `SlackSecret` or workspace-bound `ResolvedSigningSecret`), HMAC v0 with
+  `hash_equals`, replay memory, JSON decode, then workspace
   (`team.id` must be the installation's) and `api_app_id` checks (403). Every refusal has a fixed, untranslated body;
   logs carry the app and a reason code only.
-- **Replay protection** `Ingress\ReplayGuard`: a verified signature is remembered for 2 × skew in the PSR-6 pool
-  `ingress.replay_cache_pool`; Events API `event_id`s are de-duplicated for 1 h (a Slack retry answers 200 and is not
-  dispatched).
+- **Replay protection** `Ingress\ReplayGuard`: a verified signature is claimed atomically for 2 × skew with
+  `symfony/lock` (`ingress.replay_lock_factory`, default `lock.factory`); Events API `event_id`s are claimed for 1 h
+  (a Slack retry answers 200 and is not dispatched; the claim is released when handling fails).
 - **Events API**: `url_verification` answered only after signature and replay checks, with a pattern-checked
   challenge; `event_callback` envelopes validated and dispatched as `SlackEventReceivedEvent` (inline, or as
   `HandleSlackEvent` on Messenger with `ingress.async`); `app_uninstalled` and bot `tokens_revoked` mark the
   installation revoked (`SlackInstallationRevokedEvent`); `app_rate_limited` → `SlackEventsRateLimitedEvent`.
+- **Store contract test case** `Test\SlackInstallationStoreContractTestCase` for host installation stores.
 - **`nsk1` button-value codec** `Interaction\ButtonValueCodec` (contract §6.5, normative): `nsk1.<payload_b64>.<mac_b64>`,
   canonical JSON (keys sorted at every level, no whitespace, UTF-8 and `/` unescaped), HKDF-SHA256 key from
   `kernel.secret` with `info = nowo_slack_kit.button.v1`, MAC = first 16 bytes of HMAC-SHA256 over
@@ -100,7 +103,8 @@ a Block Kit builder and an optional Notifier chat transport. Built from contract
 - **Notifier chat transport** (optional, `notifier.enabled`): DSN `nowo-slack://default?app=<app>&team=<T…>` without
   credentials, `SlackKitOptions` (channel or user recipient, blocks, thread), message id `channel:ts`.
 - **Messenger middleware** `nowo_slack_kit.messenger.rate_limit_retry`: turns a wrapped `SlackRateLimitedException`
-  into a `RecoverableMessageHandlingException` with the `Retry-After` delay.
+  into a `RecoverableMessageHandlingException` with the `Retry-After` delay, at most `rate_limit.max_attempts`
+  deliveries (default 3).
 - **Events**: `SlackEventReceivedEvent`, `SlackInteractionReceivedEvent`, `SlackActionHandledEvent`,
   `SlackAccountClaimedEvent`, `SlackAccountVerifiedEvent`, `SlackAccountUnlinkedEvent`, `SlackLinkReleasedEvent`,
   `SlackConfirmationRateLimitedEvent`, `SlackInstallationRevokedEvent`, `SlackInstallationUnhealthyEvent`,
@@ -108,11 +112,55 @@ a Block Kit builder and an optional Notifier chat transport. Built from contract
 - **Translations** in 7 locales (en, es, fr, de, it, pt, nl), domain `NowoSlackKitBundle`.
 - **Build-time refusals**: literal (non-`%env()%`) signing secrets and previous secrets, non-literal security switches,
   `linking.enabled` without its two services, `ingress.async` without Messenger, `legacy_value_key` without
-  `legacy_until` and a map, an unparsable `legacy_until`, an unknown `default_app`.
+  `legacy_until` and a map, a `legacy_until` that is not a strict UTC instant, a legacy action mapped to
+  `nowo_slack_kit.link.confirm`, an unknown `default_app`, a missing replay lock factory, and a local replay lock
+  store outside debug and test.
 - **Demo** `demo/symfony8` (Symfony 8.1, FrankenPHP worker mode, MySQL, port 8086) against an in-app fake Slack.
 - Tooling: Makefile, Docker dev stack, CI matrix PHP 8.2–8.5 × Symfony 7.4 / 8.1, coverage gate, PHPStan with
   `nowo-tech/phpstan-frankenphp`, PHP-CS-Fixer, Rector, Igor worker-state audit, translation parity, git-history
   check, semantic PR titles.
+
+### Security (REQ-SEC-004 audit, appendix FS)
+
+The first independent audit (`3a490ab`, rated **Medium**) found one Medium, four Low and twelve Info items. Fixed
+before the 1.0.0 tag:
+
+- **FS-M1 (actor spoofing through a host-resolved signing secret).** A click verified with a
+  `SigningSecretResolverInterface` secret carries signer-chosen `team.id` / `user.id`, yet resolved a verified actor.
+  Such clicks now get **no actor** (`requiresActor` handlers answer 403), legacy unsigned values are refused on them,
+  and the built-in link confirmation refuses them. Opt-in `ingress.resolver_actors: true` (default `false`) resolves an
+  actor only when the resolver returns the secret as `Ingress\ResolvedSigningSecret($secret, $team)` and the click's
+  `team.id` equals that bound workspace; it trusts every holder of every such secret. Regression test from the PoC.
+- **FS-L1 (non-atomic replay memory).** `ReplayGuard` now claims with `symfony/lock` (new hard dependency
+  `symfony/lock ^7.4 || ^8.0`): `createLock(<sha256>, 2 × skew, autoRelease: false)->acquire(false)`, atomic on Redis
+  (`SET NX PX`) and DBAL / PDO (primary-key insert). New key `ingress.replay_lock_factory` (default `lock.factory`);
+  `ingress.replay_cache_pool` is **removed**. Outside debug and test the build fails when the store is local
+  (`flock`, `semaphore`, `in-memory`, `null`, or those classes); a store DSN from `%env()%` is checked at runtime.
+- **FS-L2 (incoming-webhook URL leaks).** `IncomingWebhookClient` uses its own HttpClient
+  (`nowo_slack_kit.webhook_http_client`: `HttpClient::create()`, no logger, not traced by the profiler), and
+  `transport_error` exceptions of both clients keep only a `RedactedTransportException` (class and
+  `SecretRedactor`-redacted message, no further `previous`).
+- **FS-L3 (mrkdwn injection in the fallback text).** `SlackMessage` escapes its fallback `text` (`&`, `<`, `>`) when
+  sent, after truncation; `rawText: true` opts out for `Mrkdwn`-built text. The Notifier subject is escaped the same way.
+- **FS-L4 (relative `legacy_until`).** `legacy_until` must be a strict UTC instant (`YYYY-MM-DDTHH:MM:SS` + `Z` or
+  `+00:00`, `LegacyValuePolicy::parseUntil()`): a literal in another form fails the build, an `%env()%` value in
+  another form turns legacy mode off.
+- **FS-I2:** the replay key is the signature alone, so apps sharing a signing secret cannot replay a request once per
+  `{app}` route.
+- **FS-I3 (documented):** during the legacy window, holders of a main-app incoming-webhook URL can post unsigned legacy
+  buttons that verified members may click; time-boxed by `legacy_until` (see [SECURITY.md](SECURITY.md#residual-risks)).
+- **FS-I4:** mapping a legacy action to `nowo_slack_kit.link.confirm` fails the build; unsigned legacy confirmations
+  are never accepted.
+- **FS-I5:** an `event_id` claim is released when handling fails (the endpoint answers 500), so Slack's retries work.
+- **FS-I7:** `rate_limit.max_attempts` (default 3, 1–20) bounds the Messenger rate-limit retries (counted with
+  `RedeliveryStamp`; the original failure is rethrown at the limit).
+- **FS-I8 (documented):** the dev profiler's HttpClient panel and its cURL export show the raw `Authorization` header;
+  dev only, webhook calls are not traced.
+- **FS-I9:** `SecretRedactor` is used for every `transport_error` `previous`.
+- **FS-I11:** a `kernel.secret` under 32 bytes or a known placeholder logs `reason: weak_kernel_secret` when the
+  button key is derived (`ButtonValueCodec::deriveCheckedKey()`).
+- **FS-I12:** `Test\SlackInstallationStoreContractTestCase` ships for host stores and runs against the in-memory and
+  InstanceSettings stores.
 
 ### Interim decisions (aligned with symfony-beacon 1.122.1)
 
@@ -121,7 +169,8 @@ Decided by the owner on 2026-11-05 so that Beacon's adoption is a no-op:
 1. **Link confirmations carry no nonce `n`.** Beacon has no nonce store. The bundle binds a confirmation to the claim
    instead: the value data is `{acc, c, uid}` where `c` is the link's claim time (Unix seconds), and a click is
    accepted only when `c` equals the current claim time. Signed confirmations **without** `c` (Beacon 1.122.1 format
-   `{acc, uid}`) are accepted only while `interactions.legacy_until` is in the future
+   `{acc, uid}`) are accepted only while `interactions.legacy_until` is in the future (never on resolver-verified
+   clicks; unsigned legacy confirmations are never accepted)
    (`LegacyValuePolicy::isWindowOpen()`, independent of `legacy_value_key`). This leaves a **replay window**: while
    the legacy window is open and until the value's `exp` (24 h), a `c`-less button from an earlier claim of the same
    Slack id by the same account (for example after unlink and re-claim) still verifies the link. Only the Slack member
@@ -131,15 +180,15 @@ Decided by the owner on 2026-11-05 so that Beacon's adoption is a no-op:
    otherwise. When present, the verifier refuses a click from another `team.id`.
 3. **Final configuration keys** `nowo_slack_kit.interactions.value_ttl` (ISO-8601 duration, default `P30D`, literal),
    `nowo_slack_kit.interactions.previous_secrets` (list of `%env()%` placeholders, literals fail the build) and
-   `nowo_slack_kit.interactions.legacy_until` (ISO-8601 UTC instant, exclusive, or `%env(SLACK_LEGACY_UNTIL)%` parsed
-   at runtime; an empty value turns legacy off), plus `legacy_value_key` and `legacy_action_map`.
+   `nowo_slack_kit.interactions.legacy_until` (strict UTC instant such as `2026-12-05T00:00:00Z`, exclusive, or
+   `%env(SLACK_LEGACY_UNTIL)%` parsed at runtime; an empty or malformed value turns legacy off), plus `legacy_value_key` and `legacy_action_map`.
 
 ### Notes / deviations from contract v1.1
 
 - Twig namespace is `@NowoSlackKitBundle` (house rule REQ-TWIG-002), not `@NowoSlackKit`.
 - Not implemented in 1.0 (keys absent from the configuration tree): `enabled`, `apps.*.client_id` /
   `client_secret` / `bot_scopes`, `credentials.settings_role` (the settings section uses InstanceSettings' own
-  access checker), `rate_limit.max_attempts`, `rate_limit.client_throttle` (no client-side token bucket),
+  access checker), `rate_limit.client_throttle` (no client-side token bucket),
   `messenger.retry_on_rate_limit` (the retry middleware is a service the host adds to its bus; retries follow the
   transport's retry strategy), `oauth.*` (1.1), `blocks.allow_http_links` (a per-call `$allowHttp` argument instead),
   `ui.layout`. The four linking limiters are configured as `linking.<name>.{limit, interval}`.
@@ -148,16 +197,17 @@ Decided by the owner on 2026-11-05 so that Beacon's adoption is a no-op:
 - Added keys not in the contract: `linking.return_route`, `test_connection.{enabled, rate_limit}`.
 - `ingress.async` defaults to `false` (the contract says `true` when Messenger is installed); enabling it without
   Messenger fails the build.
-- Replay memory is check-then-set on every adapter (no atomic add yet); a warning (`reason: array_pool`) is logged on
-  each check when the pool is an in-process `ArrayAdapter` in `prod`.
+- Replay memory uses `symfony/lock` (`ingress.replay_lock_factory`) instead of the contract's PSR-6
+  `ingress.replay_cache_pool`, which does not exist; the claim is atomic on Redis and DBAL / PDO stores, and local
+  stores fail the build outside debug and test. `rate_limit.max_attempts` is implemented (default 3).
 - `LinkResult` cases are `Claimed`, `Found`, `NotFound`, `InUse`, `Invalid`, `AlreadyVerified`, `Unavailable`,
   `RateLimited`, `ConfirmationSent`, `ConfirmationFailed`, `Unlinked` (the contract's `LINKED` is split into
   `Claimed` / `AlreadyVerified`).
 - `InstanceSettingsInstallationStore::markRevoked()` clears the stored bot token (the section has no revocation
   column).
-- Ephemeral answers and `chat.update` are skipped for clicks verified by a host `SigningSecretResolverInterface`
-  secret (the bundle has no bot token for that workspace).
-- Not shipped yet: `SlackInstallationStoreContractTestCase` for host stores and the HttpLogBundle masked-header
-  registration (§12; the headers to mask are documented in [SECURITY.md](SECURITY.md)), `SlackInstallationSavedEvent`
+- Clicks verified by a host `SigningSecretResolverInterface` secret get no actor unless `ingress.resolver_actors`
+  (audit FS-M1; not in the contract). Ephemeral answers and `chat.update` are skipped for them (the bundle has no bot token for that workspace).
+- `SlackInstallationStoreContractTestCase` ships under `Nowo\SlackKitBundle\Test` (contract §7.2).
+- Not shipped yet: the HttpLogBundle masked-header registration (§12; the headers to mask are documented in [SECURITY.md](SECURITY.md)), `SlackInstallationSavedEvent`
   (OAuth, 1.1). VarDumper and the profiler show `[redacted]` through `SlackSecret::__debugInfo()`; there is no
   separate caster.

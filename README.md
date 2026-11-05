@@ -41,8 +41,10 @@ per-request buffer (deferred Slack answers) is flushed on `kernel.terminate` and
   `SlackRateLimitedException` (`Retry-After` clamped). Never sleeps; a 429 is remembered per installation and method
   so other workers do not hammer Slack; optional Messenger middleware retries after `Retry-After`.
 - ✅ **Signed ingress** — `POST /slack/interactions` and `POST /slack/events` (paths configurable, per-app variants
-  `/{app}`): body cap before parsing, HMAC v0 with `hash_equals`, ≤ 300 s window on a PSR-20 clock, signature replay
-  memory, `event_id` de-duplication, workspace and app id checks, fixed refusal bodies.
+  `/{app}`): body cap before parsing, HMAC v0 with `hash_equals`, ≤ 300 s window on a PSR-20 clock, **atomic**
+  signature replay memory on `symfony/lock` (Redis or DBAL store; local stores fail the production build), `event_id`
+  de-duplication, workspace and app id checks, fixed refusal bodies. Clicks verified with a host-resolved
+  (per-destination) secret never get an actor unless you opt in.
 - ✅ **`nsk1` button values** — `nsk1.<payload>.<mac>`: canonical JSON, HKDF-SHA256 key from `kernel.secret`, 128-bit
   MAC bound to the `action_id`, expiry, optional workspace, verify-only keys after a secret rotation. Byte-compatible
   with symfony-beacon 1.122.1 (the contract's three test vectors are in the test suite).
@@ -54,9 +56,11 @@ per-request buffer (deferred Slack answers) is flushed on `kernel.terminate` and
   four rate limiters; a UiKit account card with CSRF-protected actions.
 - ✅ **Credentials** — installation store interface; InstanceSettings-backed store (encrypted bot token and signing
   secret, admin section with *Test connection*) or in-memory store; secrets wrapped in `SlackSecret` (never dumped,
-  serialised or logged) and a `SecretRedactor` for log strings.
+  serialised or logged); transport errors keep only a redacted copy of the HttpClient message (`SecretRedactor`);
+  incoming webhooks go through a logger-free, untraced HttpClient. A shipped contract test case checks host stores.
 - ✅ **Block Kit builder** — sections, headers, context, actions, buttons, link buttons, fields; Slack's limits
-  enforced (truncate text, refuse structure overflows); `Mrkdwn::escape()` by default.
+  enforced (truncate text, refuse structure overflows); `Mrkdwn::escape()` by default, fallback text and Notifier
+  subjects included.
 - ✅ **Optional Notifier transport** — `nowo-slack://default?app=default` (no secret in the DSN).
 - ✅ **Translations** — `NowoSlackKitBundle` domain in en, es, fr, de, it, pt and nl.
 - ✅ **Fakes only** — tests, fixtures and the demo use an in-app fake Slack; no real workspace, token or secret.
@@ -134,8 +138,10 @@ Slack app. More in [docs/USAGE.md](docs/USAGE.md).
 ## Requirements
 
 - PHP **8.2+** (`>=8.2 <8.6`; Symfony 8.x requires PHP 8.4+)
-- Symfony **7.4**, **8.0** or **8.1** (FrameworkBundle, HttpClient, RateLimiter, Routing, Form, Validator, Security
-  CSRF, Clock)
+- Symfony **7.4**, **8.0** or **8.1** (FrameworkBundle, HttpClient, Lock, RateLimiter, Routing, Form, Validator,
+  Security CSRF, Clock)
+- In production, a **shared lock store** for the replay memory: `framework.lock: '%env(LOCK_DSN)%'` (Redis or DBAL /
+  PDO); a random `kernel.secret` of at least 32 bytes
 - `nowo-tech/ui-kit-bundle` **^2.27**, `nowo-tech/form-kit-bundle` **^2.17**
 - Suggested: `nowo-tech/instance-settings-bundle` (bundled credential store and settings section),
   `symfony/security-bundle` (account link routes), `symfony/messenger` (async Events API, rate-limit retries),
@@ -147,6 +153,10 @@ Every key, its default and its validation: [docs/CONFIGURATION.md](docs/CONFIGUR
 setup:
 
 ```yaml
+# config/packages/framework.yaml (production)
+framework:
+    lock: '%env(LOCK_DSN)%'           # redis://redis:6379 or a DBAL / PDO DSN: atomic replay memory
+
 # config/packages/nowo_slack_kit.yaml
 nowo_slack_kit:
     credentials:
@@ -171,7 +181,10 @@ These match symfony-beacon 1.122.1, so its adoption of the bundle changes nothin
    `interactions.legacy_until` is in the future; that leaves a bounded replay window (same account, same Slack id,
    at most 24 h) described in [docs/SECURITY.md](docs/SECURITY.md#residual-risks).
 2. **`t` (workspace) is in a signed value only when the team id is known**, and omitted otherwise.
-3. **Final keys** `nowo_slack_kit.interactions.{legacy_until, previous_secrets, value_ttl}`.
+3. **Final keys** `nowo_slack_kit.interactions.{legacy_until, previous_secrets, value_ttl}`. `legacy_until` is a
+   strict UTC instant (`2026-12-05T00:00:00Z`).
+
+The REQ-SEC-004 audit (appendix FS) fixes are listed in [docs/CHANGELOG.md](docs/CHANGELOG.md#security-req-sec-004-audit-appendix-fs).
 
 Details and the remaining differences from contract v1.1: [docs/CHANGELOG.md](docs/CHANGELOG.md).
 

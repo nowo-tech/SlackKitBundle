@@ -8,6 +8,7 @@ are listed per target version.
 - [Installing 1.0.0](#installing-100)
   - [From scratch](#from-scratch)
   - [Adopting it from an in-app Slack integration](#adopting-it-from-an-in-app-slack-integration)
+  - [Production lock store](#production-lock-store)
   - [Values already posted to Slack](#values-already-posted-to-slack)
 
 ## Installing 1.0.0
@@ -32,12 +33,30 @@ touching its Slack app or its database. The full walkthrough is in
 4. Turn each click action into an `#[AsSlackActionHandler]` service and delete the app's own signature verification,
    parsing and Web API client.
 5. Configure the legacy window (below) so buttons already in Slack keep working until they age out.
+6. Configure a shared lock store for the replay memory (below).
+
+### Production lock store
+
+`symfony/lock` is a hard dependency: `ReplayGuard` claims every verified signature (and every Events API `event_id`)
+atomically through `ingress.replay_lock_factory` (default `lock.factory`). FrameworkBundle's default lock store is
+`flock`, which only protects one host, so in production (`kernel.debug: false`, environment other than `test`) the
+container build **fails** until you configure a shared store:
+
+```yaml
+framework:
+    lock: '%env(LOCK_DSN)%'   # redis://redis:6379, or a DBAL / PDO DSN
+```
+
+A DSN from an environment variable is checked at runtime: a local store then makes every ingress request fail with
+500. There is no `ingress.replay_cache_pool` option.
 
 ### Values already posted to Slack
 
 - **Unsigned JSON values** (posted before the app signed its buttons): set `interactions.legacy_value_key`,
   `legacy_action_map` and `legacy_until`. Use the **same** `legacy_until` instant the app already used (for
-  symfony-beacon: its 1.122.1 deploy + 30 days), so the adoption does not reset the window.
+  symfony-beacon: its 1.122.1 deploy + 30 days), so the adoption does not reset the window. It must be a strict UTC
+  instant such as `2026-12-05T00:00:00Z` (a literal in another form fails the build; an environment value in another
+  form turns legacy off). Mapping a legacy action to `nowo_slack_kit.link.confirm` fails the build.
 - **`nsk1` values signed by the app itself** (symfony-beacon 1.122.1 signs with the same format and the same
   `action_id`s): nothing to do as long as `kernel.secret` is unchanged. If it was rotated, list the old value in
   `interactions.previous_secrets` as an `%env()%` placeholder.

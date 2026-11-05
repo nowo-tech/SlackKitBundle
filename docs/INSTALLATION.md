@@ -20,6 +20,10 @@
 - For the default credential store and the admin section: `nowo-tech/instance-settings-bundle` (set it up first:
   Doctrine table, encryption key, admin UI — see its installation guide)
 - For the account link routes: `symfony/security-bundle`
+- `symfony/lock` (installed as a dependency) with a **shared** store in production for the replay memory:
+  `framework.lock: '%env(LOCK_DSN)%'` (Redis or DBAL / PDO). A local store (`flock`, the FrameworkBundle default,
+  `semaphore`, `in-memory`) fails the build when `kernel.debug` is false outside the `test` environment
+  ([CONFIGURATION.md](CONFIGURATION.md#ingress)).
 
 ## Install the package
 

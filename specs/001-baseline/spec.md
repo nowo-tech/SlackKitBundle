@@ -55,7 +55,10 @@ member clicks it, **then** the router verifies pattern → MAC (current key, the
 - The three §6.5.9 vectors are reproduced byte for byte; every negative check of §6.5.9 is refused with its reason.
 - `requiresActor` handlers are called only for a verified, active, same-workspace link; otherwise 403 and the
   ephemeral *Link and confirm your Slack account first*.
-- Legacy unsigned JSON values are accepted only with `legacy_value_key`, a mapped action and now < `legacy_until`.
+- Legacy unsigned JSON values are accepted only with `legacy_value_key`, a mapped action and now < `legacy_until`
+  (a strict UTC instant), and never on a request verified with a host-resolved secret.
+- A click verified with a host-resolved secret gets no actor (its `team.id` / `user.id` are chosen by whoever holds
+  that secret), unless `ingress.resolver_actors: true` and the secret is bound to the click's workspace.
 
 ### US-4 — Link a Slack account (P1)
 
@@ -79,7 +82,7 @@ empty, and the token is never rendered back.
 
 **Given** a FrankenPHP worker that does not reset the kernel, **then** no token, installation or actor is reused
 across requests: services are stateless or `ResetInterface`, igor reports no state, and the replay memory lives in a
-shared cache pool (a warning is logged for an in-process array pool in `prod`).
+shared lock store (a local store fails the build outside debug and test).
 
 ## Requirements
 
@@ -93,7 +96,8 @@ shared cache pool (a warning is logged for an in-process array pool in `prod`).
 | FR-API-003 | Rate-limit memory and the opt-in Messenger retry middleware |
 | FR-SEC-001 | `SlackSecret` value objects and `SecretRedactor` (contract §7.3, §12) |
 | FR-CRED-001 | Installation store interface, InstanceSettings and in-memory stores |
-| FR-ING-001 | Ingress order of checks, replay protection, Events API (contract §5) |
+| FR-CRED-002 | `SlackInstallationStoreContractTestCase` for host stores (audit FS-I12) |
+| FR-ING-001 | Ingress order of checks, atomic replay protection on `symfony/lock` (local stores refused outside debug and test), Events API with claim release on failure, no actor for resolver-verified clicks unless `ingress.resolver_actors` and a bound matching workspace (contract §5, audit FS-M1, FS-L1, FS-I5) |
 | FR-INT-001 | `nsk1` codec, legacy policy, router, actor resolver, replies (contract §6) |
 | FR-LINK-001 | Linking state machine, limiters and the confirm handler (contract §8) |
 | FR-BK-001 | Block Kit builder and mrkdwn escaping (contract §9) |

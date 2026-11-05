@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\SlackKitBundle\Tests\Unit\Notifier;
 
+use Nowo\SlackKitBundle\Api\SlackMessage;
 use Nowo\SlackKitBundle\BlockKit\Blocks;
 use Nowo\SlackKitBundle\Id\SlackChannelId;
 use Nowo\SlackKitBundle\Id\SlackUserId;
@@ -31,7 +32,12 @@ final class NotifierTest extends TestCase
         $sent = $transport->send(new ChatMessage('Deploy done', new SlackKitOptions(SlackChannelId::fromString(Fake::CHANNEL), [Blocks::section('Deploy done')])));
         self::assertSame(Fake::CHANNEL . ':1.000100', $sent?->getMessageId());
         $transport->send(new ChatMessage('Hi', new SlackKitOptions(SlackUserId::fromString(Fake::USER), threadTs: '1.0')));
-        self::assertSame(['chat.postMessage', 'conversations.open', 'chat.postMessage'], $api->methods());
+
+        $transport->send(new ChatMessage('<!channel> <https://evil.example|Reset>', new SlackKitOptions(SlackChannelId::fromString(Fake::CHANNEL))));
+        self::assertSame(['chat.postMessage', 'conversations.open', 'chat.postMessage', 'chat.postMessage'], $api->methods());
+        $sentMessage = $api->calls[3][1][1] ?? null;
+        self::assertInstanceOf(SlackMessage::class, $sentMessage);
+        self::assertSame('&lt;!channel&gt; &lt;https://evil.example|Reset&gt;', $sentMessage->toArguments()['text'], 'subject escaped (FS-L3)');
 
         $options = new SlackKitOptions(SlackUserId::fromString(Fake::USER));
         self::assertSame(Fake::USER, $options->getRecipientId());

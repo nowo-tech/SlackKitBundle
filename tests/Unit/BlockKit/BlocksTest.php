@@ -99,4 +99,13 @@ final class BlocksTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         new SlackMessage(' ');
     }
+
+    public function testFallbackTextIsEscapedUnlessRaw(): void
+    {
+        // Audit FS-L3: user data in the notification text cannot ping a channel or disguise a link.
+        $message = new SlackMessage('<!channel> <https://evil.example|Reset password> & co');
+        self::assertSame('&lt;!channel&gt; &lt;https://evil.example|Reset password&gt; &amp; co', $message->toArguments()['text']);
+        $raw = new SlackMessage(Mrkdwn::link('https://example.test/x', 'Open'), rawText: true);
+        self::assertSame('<https://example.test/x|Open>', $raw->toArguments()['text']);
+    }
 }

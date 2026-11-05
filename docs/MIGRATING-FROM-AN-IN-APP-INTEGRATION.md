@@ -86,6 +86,12 @@ If channel messages go through each customer's own Slack app (incoming webhooks)
 chosen from the payload, implement `SigningSecretResolverInterface` (bounded peek of the first action's data, host
 regex) and set `ingress.signing_secret_resolver`. Destinations keep the shared URL.
 
+Clicks verified with such a secret get **no actor** (any holder of the secret can sign any `team.id` / `user.id`),
+no legacy unsigned values and no link confirmation. Destination handlers must therefore either use
+`requiresActor: false` and authorise from the signed `nsk1` data and the destination, or you opt in with
+`ingress.resolver_actors: true` and yield `ResolvedSigningSecret($secret, $team)` bound to the destination app's
+workspace — which trusts every holder of every destination secret ([USAGE.md](USAGE.md#per-destination-signing-secrets)).
+
 ## 6. Click actions become handlers
 
 Each action becomes an `#[AsSlackActionHandler(action: 'acme.issue.resolve')]` service. Keep your domain checks
@@ -96,9 +102,11 @@ link confirmation is built in (`nowo_slack_kit.link.confirm`).
 ## 7. Buttons already in Slack
 
 - **Unsigned JSON values**: set `interactions.legacy_value_key` (the key holding the action name),
-  `legacy_action_map` (old name → new `action_id`, including your confirmation action →
-  `nowo_slack_kit.link.confirm`) and `legacy_until`. If your app already started a legacy window (for example when it
-  began signing values), reuse **the same instant**: the adoption must not reset it.
+  `legacy_action_map` (old name → new `action_id`) and `legacy_until` as a strict UTC instant
+  (`2026-12-05T00:00:00Z`; relative strings fail the build). If your app already started a legacy window (for example
+  when it began signing values), reuse **the same instant**: the adoption must not reset it. Do **not** map your old
+  confirmation action to `nowo_slack_kit.link.confirm` (the build fails): unsigned confirmations are never accepted;
+  members simply send a new confirmation.
 - **Values your app signed with `nsk1`**: nothing to do while `kernel.secret` is the same; after a rotation add the old
   value to `interactions.previous_secrets` (`%env()%` only).
 - **Link confirmations signed without a nonce or claim time** (`{acc, uid}`): accepted while `legacy_until` is in the
@@ -140,5 +148,7 @@ values only (`xoxb-test-not-a-real-token`, `T00000000`, `U00000001`).
 - [ ] Handlers with the host's own authorisation
 - [ ] `legacy_until` reuses the instant already in force; `previous_secrets` after any secret rotation
 - [ ] Unlink / release / revoke listeners
-- [ ] Shared `ingress.replay_cache_pool` in production
+- [ ] `framework.lock` on a shared Redis or DBAL store in production (local stores fail the build)
+- [ ] Destination handlers authorise without an actor, or `ingress.resolver_actors` is a documented decision
+- [ ] `kernel.secret` random and ≥ 32 bytes
 - [ ] Old code deleted, functional tests unchanged and green

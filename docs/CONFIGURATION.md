@@ -53,9 +53,10 @@ nowo_slack_kit:
         events_enabled: false
         max_body_bytes: 1048576       # 16 KiB..4 MiB
         max_skew_seconds: 300         # 30..300
-        replay_cache_pool: cache.app  # PSR-6 pool shared by all workers
+        replay_lock_factory: lock.factory # symfony/lock LockFactory; Redis or DBAL store in production
         max_secret_candidates: 2      # 1..5
         signing_secret_resolver: null # service id implementing SigningSecretResolverInterface
+        resolver_actors: false        # resolve actors for resolver-verified clicks bound to a workspace (opt-in)
         async: false                  # Events API callbacks through Messenger (requires symfony/messenger)
         transport: async
 
@@ -64,7 +65,7 @@ nowo_slack_kit:
         previous_secrets: []          # earlier kernel.secret values, %env()% only, verify-only
         legacy_value_key: null        # key of the action name in legacy unsigned JSON values
         legacy_action_map: {}         # legacy action name => action_id
-        legacy_until: null            # ISO-8601 UTC instant (exclusive) or '%env(SLACK_LEGACY_UNTIL)%'
+        legacy_until: null            # strict UTC instant 2026-12-05T00:00:00Z (exclusive) or '%env(SLACK_LEGACY_UNTIL)%'
 
     linking:
         enabled: false
@@ -132,11 +133,33 @@ Routes (loaded by the `nowo_slack_kit` route loader):
 
 - `interactions_path` / `events_path` replace `{prefix}/interactions` / `{prefix}/events` entirely (keep a URL that is
   already pasted in a Slack app, e.g. `/hooks/slack/interactions`).
-- `max_skew_seconds` is the timestamp window; signatures are remembered for twice that long in
-  `replay_cache_pool`. Use a pool shared by every worker and server (Redis, PDO); `cache.app` on a filesystem or array
-  adapter only protects one host or one process.
+- `max_skew_seconds` is the timestamp window. A verified signature is claimed **atomically** with a `symfony/lock`
+  key (`createLock(<sha256 of the signature>, 2 × max_skew_seconds, autoRelease: false)->acquire(false)`) that is
+  never released, so a second copy is refused even when both arrive at once. The key is the signature alone, so apps
+  that share one signing secret cannot replay a request once per `{app}` route. Events API `event_id`s are claimed
+  the same way for one hour and released when handling fails, so Slack's retry of a failed event goes through (the
+  failed delivery answers 500 `Event handling failed`).
+- `replay_lock_factory` is the `LockFactory` service id (default `lock.factory`, FrameworkBundle's `framework.lock`).
+  Use a store shared by every worker and server:
+
+  ```yaml
+  framework:
+      lock: '%env(LOCK_DSN)%'   # redis://redis:6379, or a DBAL / PDO DSN
+  ```
+
+  Outside debug and test (`kernel.debug: false` and an environment other than `test`) the build **fails** when that
+  store is local to one process or host (`flock`, `semaphore`, `in-memory`, `null`, or those store classes). A DSN
+  from an `%env()%` placeholder is checked at runtime: a local store then makes every ingress request fail (500).
+  `ingress.replay_cache_pool` no longer exists.
 - `signing_secret_resolver`: a host service that proposes extra secrets for the default interactions route from a
   bounded, unverified peek of the payload (per-destination secrets). At most `max_secret_candidates` are tried.
+  Whoever holds such a secret can sign any `team.id` and `user.id`, so a click verified with one gets **no actor**
+  (handlers with `requiresActor` answer 403), legacy unsigned values are refused on it, and the built-in link
+  confirmation refuses it.
+- `resolver_actors: true` (opt-in) resolves an actor for a resolver-verified click only when the resolver returned
+  the secret as `Ingress\ResolvedSigningSecret($secret, $team)` and the click's `team.id` equals that bound workspace.
+  It trusts **every holder of every destination secret** to sign any member id of that workspace; enable it only when
+  those secrets are known to your operators alone.
 - `async: true` sends verified `event_callback` envelopes to Messenger as `HandleSlackEvent` on `transport` and
   answers Slack at once; `false` dispatches them inline.
 
@@ -153,7 +176,10 @@ to `ButtonValueCodec::sign()`.
 
 ### previous_secrets (kernel.secret rotation)
 
-The button key is HKDF-SHA256 of `kernel.secret` (`info = nowo_slack_kit.button.v1`). After rotating `kernel.secret`,
+The button key is HKDF-SHA256 of `kernel.secret` (`info = nowo_slack_kit.button.v1`). Anyone who knows
+`kernel.secret` can forge every `nsk1` value: use a random value of at least 32 bytes. A shorter value or a known
+placeholder (`change_this…`, `demo-secret`, `ThisTokenIsNotSoSecretChangeIt`…) logs a warning with
+`reason: weak_kernel_secret` when the key is derived. After rotating `kernel.secret`,
 list the old value so buttons already in Slack keep verifying until they expire:
 
 ```yaml
@@ -177,13 +203,17 @@ nowo_slack_kit:
         legacy_value_key: a
         legacy_action_map:
             resolve: acme.issue.resolve
-            link_confirm: nowo_slack_kit.link.confirm
         legacy_until: '%env(SLACK_LEGACY_UNTIL)%'   # e.g. 2026-12-31T00:00:00Z
 ```
 
-- `legacy_until` is an ISO-8601 UTC instant, **exclusive**: from that instant on, legacy values get the same 403 and
-  *This button is no longer valid* as a bad MAC. A literal is parsed at build time (an unparsable value fails the
-  build); `%env(SLACK_LEGACY_UNTIL)%` is parsed at runtime and an **empty** value turns legacy off.
+- `legacy_until` is a strict UTC instant, **exclusive**: `YYYY-MM-DDTHH:MM:SS` followed by `Z` or `+00:00`
+  (`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|\+00:00)$`, parsed by `LegacyValuePolicy::parseUntil()`). From that
+  instant on, legacy values get the same 403 and *This button is no longer valid* as a bad MAC. A literal in any other
+  form (relative strings such as `+30 days` or `tomorrow`, which would roll forward on every boot, a date without a
+  zone, another offset) fails the build; an `%env(SLACK_LEGACY_UNTIL)%` value in any other form (empty included)
+  turns legacy mode **off** at runtime.
+- A legacy action cannot map to `nowo_slack_kit.link.confirm` (the build fails): confirmations are bound to the claim
+  time and unsigned confirmations are never accepted.
 - `legacy_value_key` requires `legacy_until` and a non-empty `legacy_action_map` (legacy mode is always time-boxed).
 - A value starting with `nsk` is never treated as legacy, even when its signature fails.
 - Legacy relaxes only the value MAC and expiry: the request signature, window, replay and workspace checks, and the
@@ -219,6 +249,10 @@ empty. Rate limited per user.
 `max_retry_after` clamps Slack's `Retry-After` (digits only; 30 s when absent) in `SlackRateLimitedException`. A 429
 is remembered per (installation, method) until then and later calls fail fast with the remaining delay.
 
+`max_attempts` (default 3, 1..20) bounds the Messenger retry middleware: it counts deliveries with Messenger's
+`RedeliveryStamp` and, at the limit, rethrows the original failure so the transport's own retry limit and failure
+transport apply.
+
 ## notifier
 
 With `symfony/notifier` installed and `notifier.enabled: true`, the chat transport factory for
@@ -233,7 +267,7 @@ without `symfony/notifier` fails the build.
 
 When `symfony/messenger` is installed the bundle registers the middleware service
 `nowo_slack_kit.messenger.rate_limit_retry`. Add it to a bus to retry handlers that fail with a Slack rate limit after
-`Retry-After` (through the transport's retry strategy):
+`Retry-After` (through the transport's retry strategy), at most `rate_limit.max_attempts` deliveries:
 
 ```yaml
 framework:
@@ -255,7 +289,10 @@ The container build fails when:
 - `linking.enabled` without `identity_store` and `account_resolver`;
 - `ingress.async` without `symfony/messenger`, `notifier.enabled` without `symfony/notifier`,
   `credentials.store: instance_settings` without InstanceSettingsBundle;
-- `legacy_value_key` without `legacy_until` and `legacy_action_map`, or a literal `legacy_until` that is not a date;
+- `legacy_value_key` without `legacy_until` and `legacy_action_map`, a literal `legacy_until` that is not a strict
+  UTC instant (`2026-12-05T00:00:00Z`), or a `legacy_action_map` target `nowo_slack_kit.link.confirm`;
+- the replay lock factory (`ingress.replay_lock_factory`) does not exist, or its store is local (`flock`,
+  `semaphore`, `in-memory`, `null`) while `kernel.debug` is false outside the `test` environment;
 - `value_ttl`, `claim_ttl` or `confirmation_ttl` is not an ISO-8601 duration;
 - two handlers declare the same `action_id`, a handler's `action_id` is malformed, or a `legacy_action_map` target
   has no handler.
@@ -267,8 +304,9 @@ None is required by the bundle. Common placeholders (values are examples, never 
 ```dotenv
 # .env.local (never committed)
 SLACK_SIGNING_SECRET=testsigningsecretnotreal00000000   # 16-128 letters or digits
-SLACK_LEGACY_UNTIL=
+SLACK_LEGACY_UNTIL=                                     # empty = legacy off; else e.g. 2026-12-05T00:00:00Z
 PREVIOUS_APP_SECRET=
+LOCK_DSN=redis://redis:6379                             # framework.lock: shared replay memory
 ```
 
 With the default `instance_settings` store the bot token (`xoxb-PLACEHOLDER` in examples) and the signing secret are

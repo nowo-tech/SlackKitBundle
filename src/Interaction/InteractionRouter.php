@@ -65,10 +65,13 @@ final readonly class InteractionRouter
      * Parses the click into a {@see SlackInteraction} without calling a handler; null when it is not routable.
      *
      * @param array<string, mixed> $payload verified `block_actions` payload
+     * @param bool $verifiedByResolver the request was verified with a host-resolved secret: legacy values are refused
+     * @param bool $trustActor whether `team.id` / `user.id` may resolve an actor (false for resolver-verified clicks,
+     *                         audit FS-M1)
      *
      * @return array{0: SlackInteraction|null, 1: Response|null} the interaction, or the response that refuses it
      */
-    public function parse(array $payload, SlackInstallationKey $installation, bool $verifiedByResolver = false): array
+    public function parse(array $payload, SlackInstallationKey $installation, bool $verifiedByResolver = false, bool $trustActor = true): array
     {
         $actions = $payload['actions'] ?? null;
         $action  = is_array($actions) && is_array($actions[0] ?? null) ? $actions[0] : null;
@@ -97,7 +100,7 @@ final readonly class InteractionRouter
                 return [null, $this->refuse($base, 'interaction.button_invalid', 'Button no longer valid', null)];
             }
         } else {
-            $resolved = $this->legacy->resolve($value);
+            $resolved = $verifiedByResolver ? null : $this->legacy->resolve($value);
             if ($resolved === null) {
                 $this->logger->info('Slack button value refused.', ['reason' => 'unsigned']);
 
@@ -110,7 +113,7 @@ final readonly class InteractionRouter
 
         $interactionId = hash('sha256', ($team->value ?? '') . '|' . ($ts ?? '') . '|' . (is_string($action['action_ts'] ?? null) ? $action['action_ts'] : '') . '|' . ($user->value ?? ''));
 
-        return [new SlackInteraction($installation, $actionId, $data, $team, $user, $this->actors->resolve($team, $user), $channel, $ts, $interactionId, $legacy, $verifiedByResolver), null];
+        return [new SlackInteraction($installation, $actionId, $data, $team, $user, $trustActor ? $this->actors->resolve($team, $user) : null, $channel, $ts, $interactionId, $legacy, $verifiedByResolver), null];
     }
 
     /**

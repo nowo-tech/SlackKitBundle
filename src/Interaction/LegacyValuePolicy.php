@@ -11,7 +11,9 @@ use Psr\Clock\ClockInterface;
 use function is_array;
 use function is_string;
 use function json_decode;
+use function preg_match;
 use function strlen;
+use function substr;
 
 use const JSON_THROW_ON_ERROR;
 
@@ -21,18 +23,36 @@ use const JSON_THROW_ON_ERROR;
  */
 final readonly class LegacyValuePolicy
 {
+    private ?DateTimeImmutable $until;
+
     /**
      * @param string|null $key `interactions.legacy_value_key` (null: legacy mode off)
      * @param array<string, string> $actionMap legacy action name → `action_id`
-     * @param DateTimeImmutable|null $until `interactions.legacy_until` (exclusive)
+     * @param DateTimeImmutable|string|null $until `interactions.legacy_until` (exclusive); a string is parsed by
+     *                                             {@see self::parseUntil()} (invalid: legacy off)
      * @param ClockInterface $clock clock
      */
     public function __construct(
         private ?string $key,
         private array $actionMap,
-        private ?DateTimeImmutable $until,
+        DateTimeImmutable|string|null $until,
         private ClockInterface $clock,
     ) {
+        $this->until = is_string($until) ? self::parseUntil($until) : $until;
+    }
+
+    /**
+     * `interactions.legacy_until` as an instant: only a strict UTC timestamp `YYYY-MM-DDTHH:MM:SS` with `Z` or
+     * `+00:00` (audit FS-L4). Anything else (relative strings, zone-less or empty values) is null: legacy mode off.
+     */
+    public static function parseUntil(?string $value): ?DateTimeImmutable
+    {
+        if ($value === null || preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|\+00:00)$/', $value) !== 1) {
+            return null;
+        }
+        $instant = DateTimeImmutable::createFromFormat('!Y-m-d\TH:i:sP', $value);
+
+        return $instant instanceof DateTimeImmutable && $instant->format('Y-m-d\TH:i:s') === substr($value, 0, 19) ? $instant : null;
     }
 
     /**

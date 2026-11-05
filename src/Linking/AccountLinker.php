@@ -176,12 +176,14 @@ final readonly class AccountLinker
      * clicker, the account's current link (id, workspace and claim time `c`) all match and the account is active.
      * `c` binds the button to one claim: a new claim (or an unlink and re-claim) makes every older button useless,
      * and confirming twice is a no-op, so no nonce store is needed. A signed value without `c` is accepted only while
-     * the legacy window is open (buttons issued before adoption); a legacy unsigned value likewise.
+     * the legacy window is open (buttons issued before adoption). Unsigned legacy values are always refused (the
+     * container refuses mapping a legacy action to this one, audit FS-I4).
      */
     public function confirm(SlackInteraction $interaction): SlackInteractionReply
     {
-        $accountId = $interaction->string($interaction->legacy ? 'u' : 'acc');
-        $valueUser = $interaction->string($interaction->legacy ? 's' : 'uid');
+        // A click verified with a host-resolved secret carries signer-chosen team and user ids (audit FS-M1).
+        $accountId = $interaction->legacy || $interaction->verifiedByResolver ? null : $interaction->string('acc');
+        $valueUser = $interaction->string('uid');
         $claimedAt = $interaction->int('c');
         $link      = $accountId !== null ? $this->identities->findLinkByAccount($accountId) : null;
 

@@ -42,8 +42,9 @@ abstract class KernelTestCase extends TestCase
 
     /**
      * @param array<string, mixed> $config nowo_slack_kit configuration
+     * @param array<string, mixed> $framework extra FrameworkBundle configuration
      */
-    protected function bootKernel(array $config = []): SlackKitTestKernel
+    protected function bootKernel(array $config = [], string $environment = 'test', array $framework = []): SlackKitTestKernel
     {
         $id     = (string) preg_replace('/\W+/', '_', static::class . '_' . $this->name() . '_' . count($this->kernels));
         $kernel = new SlackKitTestKernel(
@@ -63,6 +64,8 @@ abstract class KernelTestCase extends TestCase
                 $routes->import('.', 'nowo_slack_kit');
                 $routes->add('test_profile', '/profile')->controller('Nowo\SlackKitBundle\Tests\Support\ProfileController');
             },
+            $environment,
+            $framework,
         );
         $this->kernels[] = $kernel;
         $kernel->boot();
