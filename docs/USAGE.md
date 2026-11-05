@@ -48,7 +48,8 @@ $auth    = $slack->authTest($key);                                              
 
 - `SlackMessage($text, $blocks = [], $unfurlLinks = false, $unfurlMedia = false, $threadTs = null, $rawText = false)`:
   the fallback `text` is required (Slack accessibility rule; empty text throws); unfurling is off by default. The
-  fallback text is **mrkdwn-escaped** (`&`, `<`, `>`) when sent (after truncation), so user data such as an issue
+  fallback text is **mrkdwn-escaped** (`&`, `<`, `>`) when sent and then capped at 4 000 characters **after**
+  escaping, never leaving a cut entity behind, so user data such as an issue
   title `<!channel>` cannot ping a channel or disguise a link in the notification. Pass `rawText: true` only for text
   built with `Mrkdwn::escape()` / `Mrkdwn::link()` / `Mrkdwn::mention()`.
 - `SlackUserId`, `SlackTeamId`, `SlackChannelId` are validated value objects (`fromString()` throws, `tryFrom()`
@@ -214,7 +215,9 @@ final readonly class DestinationSecretResolver implements SigningSecretResolverI
             // A plain SlackSecret is enough; bind the workspace only if you opt in to resolver actors.
             yield new ResolvedSigningSecret(
                 SlackSecret::signingSecret($destination->signingSecret()),
-                SlackTeamId::tryFrom($destination->slackTeamId()),   // e.g. T00000000, or null when unknown
+                // Host-verified only (auth.test with the destination's own bot token, OAuth, or an operator):
+                // never a value typed by whoever pasted the destination secret. Null when unknown.
+                SlackTeamId::tryFrom($destination->verifiedSlackTeamId()),
             );
         }
     }
@@ -236,7 +239,10 @@ such a secret (the customer's Slack app, its admins, whoever pasted it) can sign
 Opt-in: with `ingress.resolver_actors: true`, an actor is resolved when the verifying candidate was a
 `ResolvedSigningSecret` bound to a workspace and the click's `team.id` equals it. This trusts every holder of every
 such secret to act as any linked member of that workspace; enable it only when those secrets are held by your
-operators alone.
+operators alone. The bound team must come from a **host-verified** source (`auth.test` with the destination's own bot
+token, OAuth, or an operator) and never from a value the secret holder typed or chose; otherwise that person picks the
+workspace and can act as its members. The opt-in only restores the actor: legacy unsigned values and link
+confirmations stay refused on resolver-verified clicks.
 
 ## Events API
 
@@ -249,7 +255,10 @@ Enable `ingress.events_enabled`, add the Events URL (`nowo_slack_kit_ingress_url
 - every `event_callback` is dispatched as `SlackEventReceivedEvent` (installation key, `eventId`, `eventTime`, `type`,
   decoded `event`), inline or through Messenger with `ingress.async: true`;
 - Slack retries of the same `event_id` within an hour answer 200 and are dropped; when handling fails (inline
-  listener or Messenger dispatch) the claim is released and the endpoint answers 500, so Slack's retry is handled;
+  listener or Messenger dispatch) the claim is released and the endpoint answers 500, so Slack's retry is handled.
+  Delivery is therefore **at-least-once**: partial side effects of a failed run repeat on the retry, and a slow
+  handler that fails after Slack's retry was already answered 200 loses the event (Slack does not retry again). Keep
+  listeners idempotent and prefer `ingress.async: true`;
 - `app_rate_limited` dispatches `SlackEventsRateLimitedEvent`.
 
 ```php

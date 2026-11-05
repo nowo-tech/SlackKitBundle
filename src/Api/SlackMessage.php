@@ -11,6 +11,9 @@ use Nowo\SlackKitBundle\BlockKit\Mrkdwn;
 
 use function array_values;
 use function count;
+use function mb_strlen;
+use function mb_substr;
+use function preg_replace;
 use function trim;
 
 /**
@@ -67,8 +70,7 @@ final readonly class SlackMessage
      */
     public function toArguments(): array
     {
-        $text      = Blocks::truncate($this->text, Blocks::MAX_FALLBACK_TEXT);
-        $arguments = ['text' => $this->rawText ? $text : Mrkdwn::escape($text), 'unfurl_links' => $this->unfurlLinks, 'unfurl_media' => $this->unfurlMedia];
+        $arguments = ['text' => $this->fallbackText(), 'unfurl_links' => $this->unfurlLinks, 'unfurl_media' => $this->unfurlMedia];
         if ($this->blocks !== []) {
             $arguments['blocks'] = $this->blocks;
         }
@@ -77,5 +79,22 @@ final readonly class SlackMessage
         }
 
         return $arguments;
+    }
+
+    /**
+     * The fallback text, escaped unless raw, and capped **after** escaping (audit FSD-I4) without leaving a cut
+     * entity behind.
+     */
+    private function fallbackText(): string
+    {
+        if ($this->rawText) {
+            return Blocks::truncate($this->text, Blocks::MAX_FALLBACK_TEXT);
+        }
+        $escaped = Mrkdwn::escape($this->text);
+        if (mb_strlen($escaped) <= Blocks::MAX_FALLBACK_TEXT) {
+            return $escaped;
+        }
+
+        return preg_replace('/&[a-z]{0,3}$/', '', mb_substr($escaped, 0, Blocks::MAX_FALLBACK_TEXT - 1)) . '…';
     }
 }

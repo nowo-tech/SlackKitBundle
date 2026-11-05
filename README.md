@@ -42,7 +42,8 @@ per-request buffer (deferred Slack answers) is flushed on `kernel.terminate` and
   so other workers do not hammer Slack; optional Messenger middleware retries after `Retry-After`.
 - ✅ **Signed ingress** — `POST /slack/interactions` and `POST /slack/events` (paths configurable, per-app variants
   `/{app}`): body cap before parsing, HMAC v0 with `hash_equals`, ≤ 300 s window on a PSR-20 clock, **atomic**
-  signature replay memory on `symfony/lock` (Redis or DBAL store; local stores fail the production build), `event_id`
+  signature replay memory on `symfony/lock` (allowlist of expiring shared stores such as Redis or DBAL; local and
+  session-scoped stores fail the production build), `event_id`
   de-duplication, workspace and app id checks, fixed refusal bodies. Clicks verified with a host-resolved
   (per-destination) secret never get an actor unless you opt in.
 - ✅ **`nsk1` button values** — `nsk1.<payload>.<mac>`: canonical JSON, HKDF-SHA256 key from `kernel.secret`, 128-bit
@@ -140,8 +141,9 @@ Slack app. More in [docs/USAGE.md](docs/USAGE.md).
 - PHP **8.2+** (`>=8.2 <8.6`; Symfony 8.x requires PHP 8.4+)
 - Symfony **7.4**, **8.0** or **8.1** (FrameworkBundle, HttpClient, Lock, RateLimiter, Routing, Form, Validator,
   Security CSRF, Clock)
-- In production, a **shared lock store** for the replay memory: `framework.lock: '%env(LOCK_DSN)%'` (Redis or DBAL /
-  PDO); a random `kernel.secret` of at least 32 bytes
+- In production, an **expiring shared lock store** for the replay memory, ideally a dedicated
+  `framework.lock.resources.slack_kit` resource (Redis, or a DBAL / PDO DSN without `+advisory`); a random
+  `kernel.secret` of at least 32 bytes
 - `nowo-tech/ui-kit-bundle` **^2.27**, `nowo-tech/form-kit-bundle` **^2.17**
 - Suggested: `nowo-tech/instance-settings-bundle` (bundled credential store and settings section),
   `symfony/security-bundle` (account link routes), `symfony/messenger` (async Events API, rate-limit retries),
@@ -153,9 +155,12 @@ Every key, its default and its validation: [docs/CONFIGURATION.md](docs/CONFIGUR
 setup:
 
 ```yaml
-# config/packages/framework.yaml (production)
+# config/packages/framework.yaml (production): a dedicated lock resource, the app's own locks unchanged
 framework:
-    lock: '%env(LOCK_DSN)%'           # redis://redis:6379 or a DBAL / PDO DSN: atomic replay memory
+    lock:
+        resources:
+            default: ['%env(LOCK_DSN)%']
+            slack_kit: ['%env(SLACK_KIT_LOCK_DSN)%']  # redis://… or a DBAL / PDO DSN (no +advisory)
 
 # config/packages/nowo_slack_kit.yaml
 nowo_slack_kit:
@@ -163,6 +168,7 @@ nowo_slack_kit:
         store: instance_settings      # bot token + signing secret in the encrypted "slack" section
     ingress:
         events_enabled: true          # app_uninstalled / tokens_revoked
+        replay_lock_factory: lock.slack_kit.factory   # atomic replay memory on the dedicated resource
     interactions:
         value_ttl: P30D
         previous_secrets: []          # '%env(OLD_APP_SECRET)%' after a kernel.secret rotation

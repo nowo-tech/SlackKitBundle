@@ -29,7 +29,7 @@ Until then the code on `main` is a release candidate.
 | Area | Threat | Control |
 | --- | --- | --- |
 | Forged interaction | An attacker POSTs a fake click to the public endpoint | HMAC v0 over the raw body with the app's signing secret, `hash_equals`, 401 with a fixed body |
-| Replay | A captured signed request is sent again within the window, even in parallel | Atomic `symfony/lock` claim of the signature for 2 × `max_skew_seconds` (`ReplayGuard`, keyed on the signature alone); `event_id` claimed for 1 h; local lock stores fail the build in production; window ≤ 300 s on `ClockInterface` |
+| Replay | A captured signed request is sent again within the window, even in parallel | Atomic `symfony/lock` claim of the signature for 2 × `max_skew_seconds` (`ReplayGuard`, keyed on the signature alone); `event_id` claimed for 1 h; only expiring shared lock stores (Redis, Memcached, PDO, Doctrine DBAL, MongoDB, DynamoDB) build in production, local and session-scoped (`+advisory`, `zookeeper`) ones fail; window ≤ 300 s on `ClockInterface` |
 | Stale request | An old request replayed after the memory TTL | The timestamp window refuses it before the memory matters |
 | Forged buttons via a leaked incoming webhook | A message with buttons posted to a channel, clicked by a real user, signed by Slack | `nsk1` values MAC-signed with a key derived from `kernel.secret`, bound to the `action_id`, with expiry and optional workspace; legacy mode time-boxed by `legacy_until` |
 | Cross-workspace / cross-app click | A click from another workspace or app that only shares the URL | `team.id` must be the installation's workspace (a missing workspace id refuses every click) and `api_app_id` must match `apps.*.app_id` when set; `t` inside signed values |
@@ -63,13 +63,17 @@ Until then the code on `main` is a release candidate.
 6. Replay: an atomic `symfony/lock` claim of the signature (`acquire(false)` on a never-released, expiring key),
    else 401 with the same body.
 7. JSON decode (depth 32), else 400.
-8. Workspace and app id, else 403. Skipped for resolver-verified clicks, which therefore get **no actor**, no legacy
-   values and no link confirmation (unless `ingress.resolver_actors` and a workspace-bound `ResolvedSigningSecret`
-   matching the click's `team.id`).
+8. Workspace and app id, else 403. Skipped for resolver-verified clicks, which therefore get **no actor** (unless
+   `ingress.resolver_actors` and a workspace-bound `ResolvedSigningSecret` matching the click's `team.id`). Legacy
+   unsigned values and link confirmations are **always** refused on resolver-verified clicks, with or without the
+   opt-in: the opt-in only restores the actor.
 9. Routing; button value verification (§ below), else 403.
 
 Events API: the `event_id` is claimed after the workspace check; when handling fails the claim is released and the
-endpoint answers 500, so Slack's retry (same `event_id`) is handled.
+endpoint answers 500, so Slack's retry (same `event_id`) is handled. Delivery is therefore **at-least-once**: a
+handler that applied side effects and then failed runs them again on the retry, and a slow handler that fails after
+Slack's retry was already answered 200 loses the event (Slack does not retry again). Keep event handlers idempotent
+and prefer `ingress.async: true`.
 
 Logs carry the route, the app name and a reason code (`headers`, `signature`, `replay`, `team`, `app_id`), never a
 body, header or signature.
@@ -139,10 +143,13 @@ bot token.
 
 ## Residual risks
 
-- **Replay memory needs a shared lock store.** The claim is atomic on Redis and DBAL / PDO stores. A local store
-  (`flock`, `semaphore`, `in-memory`) fails the build outside debug and test; a store DSN from an environment
-  variable is checked at runtime (ingress requests fail with 500). A custom `replay_lock_factory` whose store the
-  bundle cannot see is trusted as configured. Handlers must be idempotent anyway.
+- **Replay memory needs an expiring shared lock store.** Outside debug and test only an allowlist builds (Redis,
+  Memcached, PDO, Doctrine DBAL, MongoDB, DynamoDB; `CombinedStore` members checked recursively). Local stores
+  (`flock`, `semaphore`, `in-memory`, `null`), session-scoped ones whose locks ignore the TTL (`pgsql+advisory:`,
+  `postgres(ql)+advisory://` advisory locks, `zookeeper://` ephemeral nodes) and unknown stores fail the build; a
+  store DSN from an environment variable is checked at runtime by the same allowlist (ingress requests fail with
+  500). A custom `replay_lock_factory` whose store the bundle cannot see at all is trusted as configured. Handlers
+  must be idempotent anyway.
 - **Two replay memories during an adoption.** A host that already remembered signatures in its own store does not
   share that memory with the bundle, so a request captured in the minutes before the deploy could be replayed once
   after it. Accepted because handlers are idempotent.
@@ -156,7 +163,10 @@ bot token.
   click runs with that member's actor. This is the forged-buttons threat of the threat table, time-boxed by design:
   keep the window short and keep webhook URLs secret.
 - **Resolver actors are an explicit trust decision.** With `ingress.resolver_actors: true`, every holder of a
-  workspace-bound destination secret can sign clicks as any member of that workspace. Off by default.
+  workspace-bound destination secret can sign clicks as any member of that workspace. Off by default. The binding is
+  only as good as its source: the bound team must be **host-verified** (`auth.test` with the destination's own bot
+  token, OAuth, or an operator) and never a value typed or chosen by whoever holds or pasted the destination secret,
+  otherwise that person picks the workspace and the actor spoofing of FS-M1 returns.
 - **Link confirmations without `c` (interim decision, aligned with symfony-beacon 1.122.1).** Beacon has no nonce
   store, so its 1.122.1 confirmation buttons carry `{acc, uid}` without a nonce `n` and without `c`. The bundle
   accepts such signed values only while `legacy_until` is set and in the future. During that window a `c`-less value
@@ -172,11 +182,13 @@ bot token.
 ## Host responsibilities
 
 - Put the ingress paths under a firewall with `security: false` and a proxy rate limit.
-- Configure `framework.lock` (or `ingress.replay_lock_factory`) with a shared Redis or DBAL store in production.
+- Point `ingress.replay_lock_factory` at a dedicated `framework.lock` resource (for example `lock.slack_kit.factory`
+  with `%env(SLACK_KIT_LOCK_DSN)%`) on an expiring shared store: Redis, or a DBAL / PDO DSN without `+advisory`.
 - Use a random `kernel.secret` of at least 32 bytes; never enable the profiler in production.
 - Extend `SlackInstallationStoreContractTestCase` in your test suite when you write your own installation store.
 - Keep `team_id` set (the settings notice warns when it is missing; clicks are refused without it).
-- Authorise every handler with the actor's own access; keep handlers idempotent.
+- Authorise every handler with the actor's own access; keep handlers idempotent (Events API delivery is
+  at-least-once).
 - Keep incoming-webhook URLs and per-destination signing secrets encrypted.
 - Disclose what goes to Slack (DMs, e-mail lookup) in the privacy notice; export and erase the Slack columns of your
   accounts with the rest of the personal data.

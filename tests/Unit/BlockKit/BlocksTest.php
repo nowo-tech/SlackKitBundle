@@ -107,5 +107,14 @@ final class BlocksTest extends TestCase
         self::assertSame('&lt;!channel&gt; &lt;https://evil.example|Reset password&gt; &amp; co', $message->toArguments()['text']);
         $raw = new SlackMessage(Mrkdwn::link('https://example.test/x', 'Open'), rawText: true);
         self::assertSame('<https://example.test/x|Open>', $raw->toArguments()['text']);
+
+        // Audit FSD-I4: the cap applies to the escaped text and never leaves a cut entity.
+        $capped = (new SlackMessage(str_repeat('&', 5_000)))->toArguments()['text'];
+        self::assertIsString($capped);
+        self::assertLessThanOrEqual(Blocks::MAX_FALLBACK_TEXT, mb_strlen($capped));
+        self::assertStringEndsWith('&amp;…', $capped);
+        $long = (new SlackMessage(str_repeat('x', 5_000), rawText: true))->toArguments()['text'];
+        self::assertIsString($long);
+        self::assertSame(Blocks::MAX_FALLBACK_TEXT, mb_strlen($long));
     }
 }

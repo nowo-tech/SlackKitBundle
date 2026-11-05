@@ -91,6 +91,9 @@ no legacy unsigned values and no link confirmation. Destination handlers must th
 `requiresActor: false` and authorise from the signed `nsk1` data and the destination, or you opt in with
 `ingress.resolver_actors: true` and yield `ResolvedSigningSecret($secret, $team)` bound to the destination app's
 workspace — which trusts every holder of every destination secret ([USAGE.md](USAGE.md#per-destination-signing-secrets)).
+The bound workspace must come from a host-verified source (`auth.test` with the destination's own bot token, OAuth,
+or an operator), never from a value typed by whoever pasted the destination secret. The opt-in only restores the
+actor: legacy values and link confirmations stay refused on those clicks.
 
 ## 6. Click actions become handlers
 
@@ -148,7 +151,9 @@ values only (`xoxb-test-not-a-real-token`, `T00000000`, `U00000001`).
 - [ ] Handlers with the host's own authorisation
 - [ ] `legacy_until` reuses the instant already in force; `previous_secrets` after any secret rotation
 - [ ] Unlink / release / revoke listeners
-- [ ] `framework.lock` on a shared Redis or DBAL store in production (local stores fail the build)
+- [ ] `ingress.replay_lock_factory` on a dedicated `framework.lock` resource with an expiring shared store (Redis or a
+      DBAL / PDO DSN without `+advisory`); local, session-scoped and unknown stores fail the production build
+- [ ] With `ingress.resolver_actors`, the bound team of each `ResolvedSigningSecret` comes from a host-verified source
 - [ ] Destination handlers authorise without an actor, or `ingress.resolver_actors` is a documented decision
 - [ ] `kernel.secret` random and ≥ 32 bytes
 - [ ] Old code deleted, functional tests unchanged and green

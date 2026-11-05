@@ -113,8 +113,8 @@ a Block Kit builder and an optional Notifier chat transport. Built from contract
 - **Build-time refusals**: literal (non-`%env()%`) signing secrets and previous secrets, non-literal security switches,
   `linking.enabled` without its two services, `ingress.async` without Messenger, `legacy_value_key` without
   `legacy_until` and a map, a `legacy_until` that is not a strict UTC instant, a legacy action mapped to
-  `nowo_slack_kit.link.confirm`, an unknown `default_app`, a missing replay lock factory, and a local replay lock
-  store outside debug and test.
+  `nowo_slack_kit.link.confirm`, an unknown `default_app`, a missing replay lock factory, and a replay lock store
+  that is not an expiring shared store outside debug and test.
 - **Demo** `demo/symfony8` (Symfony 8.1, FrankenPHP worker mode, MySQL, port 8086) against an in-app fake Slack.
 - Tooling: Makefile, Docker dev stack, CI matrix PHP 8.2–8.5 × Symfony 7.4 / 8.1, coverage gate, PHPStan with
   `nowo-tech/phpstan-frankenphp`, PHP-CS-Fixer, Rector, Igor worker-state audit, translation parity, git-history
@@ -130,18 +130,20 @@ before the 1.0.0 tag:
   Such clicks now get **no actor** (`requiresActor` handlers answer 403), legacy unsigned values are refused on them,
   and the built-in link confirmation refuses them. Opt-in `ingress.resolver_actors: true` (default `false`) resolves an
   actor only when the resolver returns the secret as `Ingress\ResolvedSigningSecret($secret, $team)` and the click's
-  `team.id` equals that bound workspace; it trusts every holder of every such secret. Regression test from the PoC.
+  `team.id` equals that bound workspace; it trusts every holder of every such secret and only restores the actor
+  (legacy values and link confirmations stay refused). Regression test from the PoC.
 - **FS-L1 (non-atomic replay memory).** `ReplayGuard` now claims with `symfony/lock` (new hard dependency
   `symfony/lock ^7.4 || ^8.0`): `createLock(<sha256>, 2 × skew, autoRelease: false)->acquire(false)`, atomic on Redis
   (`SET NX PX`) and DBAL / PDO (primary-key insert). New key `ingress.replay_lock_factory` (default `lock.factory`);
-  `ingress.replay_cache_pool` is **removed**. Outside debug and test the build fails when the store is local
-  (`flock`, `semaphore`, `in-memory`, `null`, or those classes); a store DSN from `%env()%` is checked at runtime.
+  `ingress.replay_cache_pool` is **removed**. Outside debug and test only an allowlist of expiring shared stores
+  builds (see FSD-L1 below); a store DSN from `%env()%` is checked at runtime.
 - **FS-L2 (incoming-webhook URL leaks).** `IncomingWebhookClient` uses its own HttpClient
   (`nowo_slack_kit.webhook_http_client`: `HttpClient::create()`, no logger, not traced by the profiler), and
   `transport_error` exceptions of both clients keep only a `RedactedTransportException` (class and
   `SecretRedactor`-redacted message, no further `previous`).
 - **FS-L3 (mrkdwn injection in the fallback text).** `SlackMessage` escapes its fallback `text` (`&`, `<`, `>`) when
-  sent, after truncation; `rawText: true` opts out for `Mrkdwn`-built text. The Notifier subject is escaped the same way.
+  sent, capped at 4 000 characters after escaping (FSD-I4); `rawText: true` opts out for `Mrkdwn`-built text. The
+  Notifier subject is escaped the same way.
 - **FS-L4 (relative `legacy_until`).** `legacy_until` must be a strict UTC instant (`YYYY-MM-DDTHH:MM:SS` + `Z` or
   `+00:00`, `LegacyValuePolicy::parseUntil()`): a literal in another form fails the build, an `%env()%` value in
   another form turns legacy mode off.
@@ -161,6 +163,27 @@ before the 1.0.0 tag:
   button key is derived (`ButtonValueCodec::deriveCheckedKey()`).
 - **FS-I12:** `Test\SlackInstallationStoreContractTestCase` ships for host stores and runs against the in-memory and
   InstanceSettings stores.
+
+#### Delta audit (appendix FS addendum, rated Pass / Low)
+
+- **FSD-L1 (session-scoped lock stores).** The replay lock store check is an **allowlist** of expiring shared stores
+  (`ReplayGuard::EXPIRING_STORES`: Redis, Memcached, PDO, Doctrine DBAL, MongoDB, DynamoDB), at build
+  (`ReplayLockPass`, DSNs, store classes and `StoreFactory` connection services) and at runtime
+  (`ReplayGuard::isSharedStore()` / `isSharedDsn()` for `%env()%` DSNs). `CombinedStore` members are checked
+  recursively (every member must pass; an empty one is refused). Refused: local stores, PostgreSQL advisory locks
+  (`pgsql+advisory:`, `pgsql+advisory://`, `postgres(ql)+advisory://`, whose locks ignore the TTL), `zookeeper://`
+  and any unknown DSN or store class. Plain `pgsql:` / `postgresql://` stay allowed.
+- **FSD-I1 (documented):** with `ingress.resolver_actors`, the bound team of a `ResolvedSigningSecret` must come from
+  a host-verified source (`auth.test` with the destination's bot token, OAuth, an operator), never from the secret
+  holder.
+- **FSD-I2 (documented):** SECURITY.md now states that the opt-in never re-enables legacy values or link
+  confirmations on resolver-verified clicks.
+- **FSD-I3 (documented):** Events API delivery is at-least-once (released claims re-run partial side effects; a slow
+  handler failing after Slack's retry was answered loses the event); handlers must be idempotent.
+- **FSD-I4:** the fallback text cap applies after escaping and never leaves a cut entity.
+- **FSD-I5 (documented):** INSTALLATION, UPGRADING, CONFIGURATION and README recommend a dedicated
+  `framework.lock.resources.slack_kit` resource with `ingress.replay_lock_factory: lock.slack_kit.factory` instead
+  of changing the app-wide `framework.lock`.
 
 ### Interim decisions (aligned with symfony-beacon 1.122.1)
 
@@ -198,8 +221,8 @@ Decided by the owner on 2026-11-05 so that Beacon's adoption is a no-op:
 - `ingress.async` defaults to `false` (the contract says `true` when Messenger is installed); enabling it without
   Messenger fails the build.
 - Replay memory uses `symfony/lock` (`ingress.replay_lock_factory`) instead of the contract's PSR-6
-  `ingress.replay_cache_pool`, which does not exist; the claim is atomic on Redis and DBAL / PDO stores, and local
-  stores fail the build outside debug and test. `rate_limit.max_attempts` is implemented (default 3).
+  `ingress.replay_cache_pool`, which does not exist; the claim is atomic on Redis and DBAL / PDO stores, and stores
+  off the expiring-store allowlist fail the build outside debug and test. `rate_limit.max_attempts` is implemented (default 3).
 - `LinkResult` cases are `Claimed`, `Found`, `NotFound`, `InUse`, `Invalid`, `AlreadyVerified`, `Unavailable`,
   `RateLimited`, `ConfirmationSent`, `ConfirmationFailed`, `Unlinked` (the contract's `LINKED` is split into
   `Claimed` / `AlreadyVerified`).

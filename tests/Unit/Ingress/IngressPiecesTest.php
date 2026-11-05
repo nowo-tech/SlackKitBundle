@@ -20,7 +20,11 @@ use Nowo\SlackKitBundle\Tests\Support\RecordingDispatcher;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\CombinedStore;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Lock\Store\PdoStore;
+use Symfony\Component\Lock\Store\PostgreSqlStore;
+use Symfony\Component\Lock\Strategy\UnanimousStrategy;
 
 final class IngressPiecesTest extends TestCase
 {
@@ -61,11 +65,25 @@ final class IngressPiecesTest extends TestCase
         self::assertNotNull($guard->claimEvent('Ev00000001'), 'released after a failed handler (FS-I5)');
     }
 
-    public function testReplayGuardRefusesALocalStoreWhenASharedOneIsRequired(): void
+    public function testReplayGuardRefusesStoresOffTheAllowlistWhenASharedOneIsRequired(): void
     {
         $store = new InMemoryStore();
-        self::assertTrue(ReplayGuard::isLocalStore($store));
-        self::assertFalse(ReplayGuard::isLocalStore(null));
+        self::assertFalse(ReplayGuard::isSharedStore($store));
+        self::assertFalse(ReplayGuard::isSharedStore(null));
+        self::assertTrue(ReplayGuard::isSharedStore(new PdoStore('sqlite::memory:')));
+        $pdo = new PdoStore('sqlite::memory:');
+        self::assertTrue(ReplayGuard::isSharedStore(new CombinedStore([$pdo, $pdo], new UnanimousStrategy())));
+        self::assertFalse(ReplayGuard::isSharedStore(new CombinedStore([$pdo, $store], new UnanimousStrategy())), 'a local member');
+        self::assertFalse(ReplayGuard::isSharedStore(new CombinedStore([], new UnanimousStrategy())));
+        self::assertFalse(ReplayGuard::isSharedStore(new PostgreSqlStore('pgsql:host=db.example.test')), 'session-scoped advisory locks (FSD-L1)');
+
+        foreach (['redis://r.example.test', 'rediss://r', 'memcached://m', 'mongodb://m/db?collection=l', 'pgsql:host=db', 'mysql://u@db/x', 'postgresql://u@db/x', 'sqlite:/var/x.db', 'dynamodb://default/lock'] as $dsn) {
+            self::assertTrue(ReplayGuard::isSharedDsn($dsn), $dsn);
+        }
+        foreach (['flock', 'flock:///tmp', 'semaphore', 'in-memory', 'null', 'pgsql+advisory:host=db', 'pgsql+advisory://u@db/x', 'postgresql+advisory://u@db/x', 'zookeeper://z:2181', 'custom://x'] as $dsn) {
+            self::assertFalse(ReplayGuard::isSharedDsn($dsn), $dsn);
+        }
+
         self::assertTrue((new ReplayGuard(new LockFactory($store), 300, $store, false))->claimSignature('v0=2'));
         self::assertTrue((new ReplayGuard(new LockFactory($store), 300, null, true))->claimSignature('v0=3'), 'unknown store: no runtime refusal');
 

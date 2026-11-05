@@ -139,18 +139,33 @@ Routes (loaded by the `nowo_slack_kit` route loader):
   that share one signing secret cannot replay a request once per `{app}` route. Events API `event_id`s are claimed
   the same way for one hour and released when handling fails, so Slack's retry of a failed event goes through (the
   failed delivery answers 500 `Event handling failed`).
-- `replay_lock_factory` is the `LockFactory` service id (default `lock.factory`, FrameworkBundle's `framework.lock`).
-  Use a store shared by every worker and server:
+- `replay_lock_factory` is the `LockFactory` service id (default `lock.factory`, FrameworkBundle's default lock
+  resource). Prefer a dedicated resource shared by every worker and server, so the app's own locks are untouched:
 
   ```yaml
   framework:
-      lock: '%env(LOCK_DSN)%'   # redis://redis:6379, or a DBAL / PDO DSN
+      lock:
+          resources:
+              default: ['%env(LOCK_DSN)%']              # the app's own locks, unchanged
+              slack_kit: ['%env(SLACK_KIT_LOCK_DSN)%']  # redis://… or a DBAL / PDO DSN (no +advisory)
+  nowo_slack_kit:
+      ingress:
+          replay_lock_factory: lock.slack_kit.factory
   ```
 
-  Outside debug and test (`kernel.debug: false` and an environment other than `test`) the build **fails** when that
-  store is local to one process or host (`flock`, `semaphore`, `in-memory`, `null`, or those store classes). A DSN
-  from an `%env()%` placeholder is checked at runtime: a local store then makes every ingress request fail (500).
-  `ingress.replay_cache_pool` no longer exists.
+  Outside debug and test (`kernel.debug: false` and an environment other than `test`) only an **allowlist** of
+  expiring shared stores builds (`ReplayGuard::EXPIRING_STORES`: Redis, Memcached, PDO, Doctrine DBAL, MongoDB, DynamoDB, or a `StoreFactory` connection
+  service of Redis / RedisArray / RedisCluster / Relay / Predis / Memcached / PDO / DBAL `Connection` / MongoDB
+  `Collection` / `DynamoDbClient`). `CombinedStore` members are checked one by one (all must pass; an empty one is
+  refused). Refused: local stores (`flock`, `semaphore`, `in-memory`, `null`), session-scoped ones whose locks ignore
+  the TTL (`pgsql+advisory:`, `pgsql+advisory://`, `postgres(ql)+advisory://` advisory locks, `zookeeper://`
+  ephemeral nodes) and any unknown DSN or store class. Plain `pgsql:` / `postgresql://` are fine. A store the build
+  cannot see (an `%env()%` DSN, a factory-built service) is checked at runtime with `ReplayGuard::isSharedStore()` /
+  `isSharedDsn()`; a refused one makes every ingress request fail (500). A custom factory whose store is not visible
+  at all is trusted as configured. `ingress.replay_cache_pool` no longer exists.
+- Events API delivery is **at-least-once**: a failed delivery releases its `event_id`, so Slack's retry runs the
+  handler again (partial side effects repeat), and a slow handler that fails after Slack's retry was already answered
+  200 loses the event (Slack does not retry again). Keep event handlers idempotent and prefer `async: true`.
 - `signing_secret_resolver`: a host service that proposes extra secrets for the default interactions route from a
   bounded, unverified peek of the payload (per-destination secrets). At most `max_secret_candidates` are tried.
   Whoever holds such a secret can sign any `team.id` and `user.id`, so a click verified with one gets **no actor**
@@ -159,7 +174,10 @@ Routes (loaded by the `nowo_slack_kit` route loader):
 - `resolver_actors: true` (opt-in) resolves an actor for a resolver-verified click only when the resolver returned
   the secret as `Ingress\ResolvedSigningSecret($secret, $team)` and the click's `team.id` equals that bound workspace.
   It trusts **every holder of every destination secret** to sign any member id of that workspace; enable it only when
-  those secrets are known to your operators alone.
+  those secrets are known to your operators alone. The bound team must come from a **host-verified** source
+  (`auth.test` with the destination's own bot token, OAuth, or an operator), never from a value typed or chosen by
+  whoever holds or pasted the destination secret, or the actor spoofing of FS-M1 returns under the opt-in. The opt-in
+  only restores the actor: legacy unsigned values and link confirmations stay refused on resolver-verified clicks.
 - `async: true` sends verified `event_callback` envelopes to Messenger as `HandleSlackEvent` on `transport` and
   answers Slack at once; `false` dispatches them inline.
 
@@ -291,8 +309,10 @@ The container build fails when:
   `credentials.store: instance_settings` without InstanceSettingsBundle;
 - `legacy_value_key` without `legacy_until` and `legacy_action_map`, a literal `legacy_until` that is not a strict
   UTC instant (`2026-12-05T00:00:00Z`), or a `legacy_action_map` target `nowo_slack_kit.link.confirm`;
-- the replay lock factory (`ingress.replay_lock_factory`) does not exist, or its store is local (`flock`,
-  `semaphore`, `in-memory`, `null`) while `kernel.debug` is false outside the `test` environment;
+- the replay lock factory (`ingress.replay_lock_factory`) does not exist, or, while `kernel.debug` is false outside
+  the `test` environment, its store is not an expiring shared store (Redis, Memcached, PDO, Doctrine DBAL, MongoDB, DynamoDB): the message reads "the
+  replay lock store is not an expiring shared store (…) … Point nowo_slack_kit.ingress.replay_lock_factory at a
+  dedicated framework.lock resource.";
 - `value_ttl`, `claim_ttl` or `confirmation_ttl` is not an ISO-8601 duration;
 - two handlers declare the same `action_id`, a handler's `action_id` is malformed, or a `legacy_action_map` target
   has no handler.
@@ -306,7 +326,7 @@ None is required by the bundle. Common placeholders (values are examples, never 
 SLACK_SIGNING_SECRET=testsigningsecretnotreal00000000   # 16-128 letters or digits
 SLACK_LEGACY_UNTIL=                                     # empty = legacy off; else e.g. 2026-12-05T00:00:00Z
 PREVIOUS_APP_SECRET=
-LOCK_DSN=redis://redis:6379                             # framework.lock: shared replay memory
+SLACK_KIT_LOCK_DSN=redis://redis:6379                   # framework.lock.resources.slack_kit: replay memory
 ```
 
 With the default `instance_settings` store the bot token (`xoxb-PLACEHOLDER` in examples) and the signing secret are

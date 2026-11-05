@@ -38,17 +38,29 @@ touching its Slack app or its database. The full walkthrough is in
 ### Production lock store
 
 `symfony/lock` is a hard dependency: `ReplayGuard` claims every verified signature (and every Events API `event_id`)
-atomically through `ingress.replay_lock_factory` (default `lock.factory`). FrameworkBundle's default lock store is
-`flock`, which only protects one host, so in production (`kernel.debug: false`, environment other than `test`) the
-container build **fails** until you configure a shared store:
+atomically through `ingress.replay_lock_factory` (default `lock.factory`). In production (`kernel.debug: false`,
+environment other than `test`) the container build **fails** unless that factory's store is on the allowlist of
+expiring shared stores: Redis, Memcached, PDO, Doctrine DBAL, MongoDB, DynamoDB. FrameworkBundle's default `flock` only protects one host; session-scoped
+stores (`pgsql+advisory:`, `pgsql+advisory://`, `postgres(ql)+advisory://`, `zookeeper://`) ignore the lock TTL;
+both are refused, as is any unknown DSN or store class. Plain `pgsql:` / `postgresql://` DSNs are fine (expiring
+PDO / DBAL stores).
+
+Recommended: a **dedicated** lock resource for SlackKit, so the app-wide `framework.lock` keeps its current store:
 
 ```yaml
 framework:
-    lock: '%env(LOCK_DSN)%'   # redis://redis:6379, or a DBAL / PDO DSN
+    lock:
+        resources:
+            default: ['%env(LOCK_DSN)%']              # the app's own locks, unchanged
+            slack_kit: ['%env(SLACK_KIT_LOCK_DSN)%']  # redis://… or a DBAL / PDO DSN (no +advisory)
+nowo_slack_kit:
+    ingress:
+        replay_lock_factory: lock.slack_kit.factory
 ```
 
-A DSN from an environment variable is checked at runtime: a local store then makes every ingress request fail with
-500. There is no `ingress.replay_cache_pool` option.
+FrameworkBundle's `default` resource is checked only while SlackKit points at it (the default `lock.factory`). A DSN
+from an environment variable is checked at runtime by the same allowlist: a refused store then makes every ingress
+request fail with 500. There is no `ingress.replay_cache_pool` option.
 
 ### Values already posted to Slack
 
