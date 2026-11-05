@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.0.1] - 2026-11-05](#101---2026-11-05)
   - [Documentation](#documentation)
 - [[1.0.0] - 2026-11-05](#100---2026-11-05)
   - [Added](#added)
@@ -14,6 +15,10 @@ All notable changes to this project are documented here. The format follows
   - [Notes / deviations from contract v1.1](#notes--deviations-from-contract-v11)
 
 ## [Unreleased]
+
+## [1.0.1] - 2026-11-05
+
+Documentation only: lock DSN env fallback and the replay lock store in tests.
 
 ### Documentation
 
@@ -27,6 +32,8 @@ All notable changes to this project are documented here. The format follows
   resource with `in-memory` in the test environment and to call `KernelBrowser::disableReboot()` in tests that send
   the same request twice (a reboot builds a new, empty store). SECURITY residual risks and the demo comment say so;
   FrameworkBundle's default store is documented as `semaphore` (or `flock` without `ext-sysvsem`).
+
+[1.0.1]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.0.1
 
 ## [1.0.0] - 2026-11-05
 
@@ -251,5 +258,5 @@ Decided by the owner on 2026-11-05 so that Beacon's adoption is a no-op:
   (OAuth, 1.1). VarDumper and the profiler show `[redacted]` through `SlackSecret::__debugInfo()`; there is no
   separate caster.
 
-[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.0.1...HEAD
 [1.0.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.0.0
