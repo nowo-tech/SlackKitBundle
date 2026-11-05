@@ -24,7 +24,7 @@ Others are **N/A** (or already covered by Symfony) so the decision stays auditab
 | PSR | Decision | Notes |
 | --- | -------- | ----- |
 | PSR-3 Logger | **Adopted** | The client, ingress, router, reply dispatcher and linker take a `Psr\Log\LoggerInterface` (default `NullLogger`, wired to `logger`, `slack` channel); context is ids, codes and reasons only. |
-| PSR-6 Cache | **Adopted** | `ReplayGuard` (signature and `event_id` memory) and `ClientMemory` (429 memory, unhealthy-report throttle) use a `Psr\Cache\CacheItemPoolInterface` (`ingress.replay_cache_pool`, `cache.app`). |
+| PSR-6 Cache | **Adopted** | `ClientMemory` (429 memory, unhealthy-report throttle) uses a `Psr\Cache\CacheItemPoolInterface` (`cache.app`). The replay memory (`ReplayGuard`) needs an atomic claim, which PSR-6 cannot express, so it uses `symfony/lock` (`ingress.replay_lock_factory`). |
 | PSR-16 Simple cache | **N/A** | PSR-6 covers the needs (per-item TTL). |
 | PSR-20 Clock | **Adopted** | `SignatureVerifier`, `ButtonValueCodec`, `LegacyValuePolicy`, `AccountLinker`, `EventsHandler` and the client take a `Psr\Clock\ClockInterface` (Symfony `clock`), so time windows and expiries are testable. |
 | PSR-14 Event dispatcher | **Adopted** | Events are dispatched through `Psr\EventDispatcher\EventDispatcherInterface` (Symfony `event_dispatcher`). |

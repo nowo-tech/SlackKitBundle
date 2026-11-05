@@ -20,6 +20,24 @@
 - For the default credential store and the admin section: `nowo-tech/instance-settings-bundle` (set it up first:
   Doctrine table, encryption key, admin UI — see its installation guide)
 - For the account link routes: `symfony/security-bundle`
+- `symfony/lock` (installed as a dependency) with an **expiring shared** store in production for the replay memory.
+  Give SlackKit its own lock resource and leave the app-wide `framework.lock` alone:
+
+  ```yaml
+  framework:
+      lock:
+          resources:
+              default: ['%env(LOCK_DSN)%']              # the app's own locks, unchanged
+              slack_kit: ['%env(SLACK_KIT_LOCK_DSN)%']  # redis://… or a DBAL / PDO DSN (no +advisory)
+  nowo_slack_kit:
+      ingress:
+          replay_lock_factory: lock.slack_kit.factory
+  ```
+
+  Only an allowlist of expiring shared stores builds when `kernel.debug` is false outside the `test` environment
+  (Redis, Memcached, PDO, Doctrine DBAL, MongoDB, DynamoDB). Local stores (`flock`, the FrameworkBundle default, `semaphore`, `in-memory`, `null`),
+  session-scoped ones (`pgsql+advisory:`, `postgresql+advisory://`, `zookeeper://`) and unknown stores fail the build
+  ([CONFIGURATION.md](CONFIGURATION.md#ingress)).
 
 ## Install the package
 

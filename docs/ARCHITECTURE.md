@@ -43,9 +43,14 @@ most every 10 minutes; 429 / `ratelimited` are remembered for `Retry-After` seco
 `IngressController::interactions()` / `events()` share one verification path (`verify()`): content type, capped body
 read, `SignatureVerifier` (header shapes, window on `ClockInterface`, HMAC v0), app secret from `SlackAppRegistry`
 (configuration or store), optional `SigningSecretResolverInterface` candidates over `UnverifiedPayloadPeek`, then
-`ReplayGuard::claimSignature()`. After decoding, `checkWorkspace()` maps `team.id` to an installation key and checks
-`api_app_id`. Events also pass `ReplayGuard::claimEvent()` before `EventsHandler` (directly, or through Messenger with
-`ingress.async`).
+`ReplayGuard::claimSignature()` (an atomic, never-released `symfony/lock` key; `ReplayLockPass` hands it the lock
+store and, in production, refuses any store off the allowlist of expiring shared stores, `CombinedStore` members
+included). After decoding, `checkWorkspace()` maps `team.id` to an installation
+key and checks `api_app_id`; resolver-verified clicks skip it, never accept legacy values or link confirmations, and
+are parsed with `trustActor: false` (no actor) unless `ingress.resolver_actors` and a `ResolvedSigningSecret` bound
+to the click's workspace. Events
+also pass `ReplayGuard::claimEvent()` before `EventsHandler` (directly, or through Messenger with `ingress.async`); the
+claim is released when handling fails.
 
 ## Interactions: values, router, actor, replies
 
@@ -85,9 +90,9 @@ action, account actions).
 
 | Directory | Responsibility |
 | --- | --- |
-| `src/Api` | Web API client, incoming-webhook client, message and result value objects, exceptions, rate-limit memory |
+| `src/Api` | Web API client, incoming-webhook client, message and result value objects, exceptions (incl. `RedactedTransportException`), rate-limit memory |
 | `src/BlockKit` | Block Kit builder and mrkdwn helpers |
-| `src/Ingress` | ingress controller, signature verifier, replay guard, events handler, resolver interface and peek |
+| `src/Ingress` | ingress controller, signature verifier, replay guard, events handler, resolver interface, resolved secret and peek |
 | `src/Interaction` | `nsk1` codec, legacy policy, router, actor resolver, reply dispatcher, handler contract |
 | `src/Linking` | account linker, confirm handler, host interfaces, link value object, results |
 | `src/Credentials` | installation store interface and stores, installation key, app registry |
@@ -97,5 +102,6 @@ action, account actions).
 | `src/Controller`, `src/Form`, `src/Routing`, `src/Settings`, `src/Twig` | UI: actions, forms, route loader, settings section, Twig functions |
 | `src/Notifier` | optional Notifier chat transport |
 | `src/Messenger` | rate-limit retry middleware |
-| `src/DependencyInjection` | configuration tree, extension, compiler passes |
+| `src/DependencyInjection` | configuration tree, extension, compiler passes (handlers, CSRF, replay lock store) |
+| `src/Test` | `SlackInstallationStoreContractTestCase` for host stores (PHPUnit) |
 | `src/Resources` | translations (7 locales) and the account card template |

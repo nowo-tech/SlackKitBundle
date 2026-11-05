@@ -20,8 +20,10 @@ use Psr\Log\NullLogger;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Lock\LockInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\TransportNamesStamp;
+use Throwable;
 
 use function is_array;
 use function is_int;
@@ -71,6 +73,8 @@ final readonly class IngressController
      * @param int $maxBodyBytes `ingress.max_body_bytes`
      * @param int $maxSecretCandidates `ingress.max_secret_candidates`
      * @param LoggerInterface $logger PSR-3 logger (route, app and reason only)
+     * @param bool $resolverActors `ingress.resolver_actors`: resolve actors for clicks verified with a host secret
+     *                             bound to the click's workspace ({@see ResolvedSigningSecret}); off by default
      */
     public function __construct(
         private SignatureVerifier $verifier,
@@ -86,6 +90,7 @@ final readonly class IngressController
         private int $maxBodyBytes = 1_048_576,
         private int $maxSecretCandidates = 2,
         private LoggerInterface $logger = new NullLogger(),
+        private bool $resolverActors = false,
     ) {
     }
 
@@ -98,7 +103,7 @@ final readonly class IngressController
         if ($verified instanceof Response) {
             return $verified;
         }
-        [$appName, $body, $byResolver] = $verified;
+        [$appName, $body, $byResolver, $boundTeam] = $verified;
 
         parse_str($body, $fields);
         try {
@@ -131,7 +136,10 @@ final readonly class IngressController
             return $this->text('', Response::HTTP_OK);
         }
 
-        [$interaction, $refusal] = $this->router->parse($payload, $installation, $byResolver);
+        // FS-M1: the team and user of a resolver-verified click are chosen by whoever holds that secret.
+        $trustActor = !$byResolver
+            || ($this->resolverActors && $boundTeam instanceof SlackTeamId && $boundTeam->equals(SlackTeamId::tryFrom(is_array($payload['team'] ?? null) ? ($payload['team']['id'] ?? null) : null)));
+        [$interaction, $refusal] = $this->router->parse($payload, $installation, $byResolver, $trustActor);
         $this->dispatcher?->dispatch(new SlackInteractionReceivedEvent($type, $payload, $interaction));
 
         return $interaction === null ? ($refusal ?? $this->text('No actions', Response::HTTP_BAD_REQUEST)) : $this->router->dispatch($interaction);
@@ -187,14 +195,23 @@ final readonly class IngressController
         if (!is_string($eventId) || preg_match('/^[A-Za-z0-9]{1,64}$/', $eventId) !== 1 || !is_array($event) || !is_string($event['type'] ?? null) || !is_int($envelope['event_time'] ?? null)) {
             return $this->text('Invalid event', Response::HTTP_BAD_REQUEST);
         }
-        if (!$this->replay->claimEvent($eventId)) {
+        $claim = $this->replay->claimEvent($eventId);
+        if (!$claim instanceof LockInterface) {
             return $this->text('', Response::HTTP_OK); // A Slack retry of a delivered event.
         }
 
-        if ($this->bus instanceof MessageBusInterface) {
-            $this->bus->dispatch(new HandleSlackEvent($appName, $envelope), [new TransportNamesStamp([$this->transport])]);
-        } else {
-            $this->events->handle($appName, $envelope);
+        try {
+            if ($this->bus instanceof MessageBusInterface) {
+                $this->bus->dispatch(new HandleSlackEvent($appName, $envelope), [new TransportNamesStamp([$this->transport])]);
+            } else {
+                $this->events->handle($appName, $envelope);
+            }
+        } catch (Throwable $e) {
+            // Audit FS-I5: forget the event so Slack's retry (same event_id) is handled.
+            $claim->release();
+            $this->logger->error('Slack event handling failed.', ['app' => $appName, 'reason' => 'handler', 'exception' => $e::class]);
+
+            return $this->text('Event handling failed', Response::HTTP_INTERNAL_SERVER_ERROR);
         }
 
         return $this->text('', Response::HTTP_OK);
@@ -203,7 +220,8 @@ final readonly class IngressController
     /**
      * Steps 1–7 of §5.2.
      *
-     * @return array{0: string, 1: string, 2: bool}|Response app, raw body and "verified by a host secret", or the refusal
+     * @return array{0: string, 1: string, 2: bool, 3: SlackTeamId|null}|Response app, raw body, "verified by a host
+     *                                                                            secret" and its bound workspace, or the refusal
      */
     private function verify(Request $request, string $contentType, ?string $app, bool $allowResolver): array|Response
     {
@@ -233,6 +251,7 @@ final readonly class IngressController
 
         $label      = null;
         $byResolver = false;
+        $boundTeam  = null;
         $secret     = $this->apps->signingSecret($appName);
         if ($secret instanceof SlackSecret && $this->verifier->matches($secret, $timestamp, $signature, $body)) {
             $label = 'app:' . $appName;
@@ -242,9 +261,11 @@ final readonly class IngressController
                 if (++$tried > $this->maxSecretCandidates) {
                     break;
                 }
-                if ($this->verifier->matches($candidate, $timestamp, $signature, $body)) {
+                $resolved = $candidate instanceof ResolvedSigningSecret ? $candidate : new ResolvedSigningSecret($candidate);
+                if ($this->verifier->matches($resolved->secret, $timestamp, $signature, $body)) {
                     $label      = 'resolver';
                     $byResolver = true;
+                    $boundTeam  = $resolved->team;
                     break;
                 }
             }
@@ -252,11 +273,11 @@ final readonly class IngressController
         if ($label === null) {
             return $this->unauthorized($appName, 'signature');
         }
-        if (!$this->replay->claimSignature($label, $signature)) {
+        if (!$this->replay->claimSignature($signature)) {
             return $this->unauthorized($appName, 'replay');
         }
 
-        return [$appName, $body, $byResolver];
+        return [$appName, $body, $byResolver, $boundTeam];
     }
 
     /**

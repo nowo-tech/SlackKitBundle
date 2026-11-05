@@ -18,9 +18,10 @@ use Nowo\SlackKitBundle\Interaction\InteractionRouter;
 use Nowo\SlackKitBundle\Interaction\LegacyValuePolicy;
 use Nowo\SlackKitBundle\Interaction\ReplyDispatcher;
 use stdClass;
-use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
@@ -53,6 +54,7 @@ final class Ingress
         array $legacyMap = ['resolve' => 'beacon.issue.resolve'],
         int $maxBody = 65_536,
         bool $withTeam = true,
+        bool $resolverActors = false,
     ) {
         $this->clock            = new MockClock('@' . Fake::NOW);
         $this->store            = Fake::store($withTeam);
@@ -78,7 +80,7 @@ final class Ingress
         );
         $this->controller = new IngressController(
             new SignatureVerifier($this->clock),
-            new ReplayGuard(new ArrayAdapter()),
+            new ReplayGuard(new LockFactory(new InMemoryStore())),
             new SlackAppRegistry('default', $apps, $this->store),
             $this->store,
             $this->router,
@@ -90,6 +92,7 @@ final class Ingress
             $maxBody,
             2,
             $this->logger,
+            $resolverActors,
         );
     }
 }

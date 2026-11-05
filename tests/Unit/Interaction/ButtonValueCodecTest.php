@@ -8,7 +8,9 @@ use Nowo\SlackKitBundle\Id\SlackTeamId;
 use Nowo\SlackKitBundle\Interaction\ButtonValue;
 use Nowo\SlackKitBundle\Interaction\ButtonValueCodec;
 use Nowo\SlackKitBundle\Interaction\InvalidButtonValueException;
+use Nowo\SlackKitBundle\Interaction\LegacyValuePolicy;
 use Nowo\SlackKitBundle\Tests\Support\Fake;
+use Nowo\SlackKitBundle\Tests\Support\RecordingLogger;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
@@ -192,5 +194,31 @@ final class ButtonValueCodecTest extends TestCase
             self::assertSame($reason, $e->reason);
             self::assertSame($reason, $e->getMessage(), 'the message is the code only, never the value');
         }
+    }
+
+    public function testWeakKernelSecretsAreLogged(): void
+    {
+        // Audit FS-I11.
+        $logger = new RecordingLogger();
+        ButtonValueCodec::deriveCheckedKey('change_this_secret_key_to_a_random_value', $logger);
+        ButtonValueCodec::deriveCheckedKey('short', $logger);
+        self::assertCount(2, $logger->records);
+        self::assertSame('weak_kernel_secret', $logger->records[0]['context']['reason']);
+        $strong = ButtonValueCodec::deriveCheckedKey('k9Q2vX7mP4tR8wZ1bN6cF3hJ5lD0sG2aE7uY', $logger);
+        self::assertCount(2, $logger->records);
+        self::assertSame(ButtonValueCodec::deriveKey('k9Q2vX7mP4tR8wZ1bN6cF3hJ5lD0sG2aE7uY')->reveal(), $strong->reveal());
+    }
+
+    public function testLegacyUntilIsAStrictUtcInstant(): void
+    {
+        // Audit FS-L4.
+        self::assertSame(1796428800, LegacyValuePolicy::parseUntil('2026-12-05T00:00:00Z')?->getTimestamp());
+        self::assertSame(1796428800, LegacyValuePolicy::parseUntil('2026-12-05T00:00:00+00:00')?->getTimestamp());
+        foreach (['+30 days', 'tomorrow', '2026-12-05', '2026-12-05T00:00:00', '2026-12-05T00:00:00+01:00', '2026-13-45T00:00:00Z', '', null] as $value) {
+            self::assertNull(LegacyValuePolicy::parseUntil($value), (string) $value);
+        }
+        $clock = new MockClock('@' . Fake::NOW);
+        self::assertFalse((new LegacyValuePolicy('a', ['r' => 'x'], '+30 days', $clock))->isWindowOpen(), 'a relative env value turns legacy off');
+        self::assertTrue((new LegacyValuePolicy('a', ['r' => 'x'], '2027-01-01T00:00:00Z', $clock))->isWindowOpen());
     }
 }

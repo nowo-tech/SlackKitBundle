@@ -6,6 +6,7 @@ namespace Nowo\SlackKitBundle;
 
 use Nowo\SlackKitBundle\DependencyInjection\Compiler\ActionHandlerPass;
 use Nowo\SlackKitBundle\DependencyInjection\Compiler\CsrfPass;
+use Nowo\SlackKitBundle\DependencyInjection\Compiler\ReplayLockPass;
 use Nowo\SlackKitBundle\DependencyInjection\NowoSlackKitExtension;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Extension\ExtensionInterface;
@@ -31,13 +32,14 @@ final class NowoSlackKitBundle extends Bundle
     public const NOTICE_TAG = 'nowo_slack_kit.settings_notice';
 
     /**
-     * Registers the handler map and the CSRF guard of the POST actions.
+     * Registers the handler map, the CSRF guard of the POST actions and the replay lock store check.
      */
     public function build(ContainerBuilder $container): void
     {
         parent::build($container);
         $container->addCompilerPass(new ActionHandlerPass());
         $container->addCompilerPass(new CsrfPass());
+        $container->addCompilerPass(new ReplayLockPass());
     }
 
     /**

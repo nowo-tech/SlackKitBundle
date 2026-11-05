@@ -1,7 +1,7 @@
 # Code inventory — 001-baseline
 
-**Last audited**: 2026-11-05
-**Scope**: every production file under `src/` (90 files, `find src -type f | wc -l`). Tests, demo and generated caches are out of scope.
+**Last audited**: 2026-11-05 (SEC-004 FS fixes)
+**Scope**: every production file under `src/` (94 files, `find src -type f | wc -l`). Tests, demo and generated caches are out of scope.
 
 ## Bundle / DI
 
@@ -9,6 +9,7 @@
 | --- | --- | --- |
 | `src/DependencyInjection/Compiler/ActionHandlerPass.php` | Bundle / DI | FR-DI-002 |
 | `src/DependencyInjection/Compiler/CsrfPass.php` | Bundle / DI | FR-DI-002 |
+| `src/DependencyInjection/Compiler/ReplayLockPass.php` | Bundle / DI | FR-DI-002, FR-ING-001 |
 | `src/DependencyInjection/Configuration.php` | Bundle / DI | FR-DI-002 |
 | `src/DependencyInjection/NowoSlackKitExtension.php` | Bundle / DI | FR-DI-002 |
 | `src/NowoSlackKitBundle.php` | Bundle / DI | FR-DI-001 |
@@ -25,6 +26,7 @@
 | `src/Api/IncomingWebhookClient.php` | Web API client | FR-API-001 |
 | `src/Api/PostedMessage.php` | Web API client | FR-API-001 |
 | `src/Api/RecoverableSlackException.php` | Web API client | FR-API-001 |
+| `src/Api/RedactedTransportException.php` | Web API client | FR-API-001 |
 | `src/Api/SlackApiClient.php` | Web API client | FR-API-001 |
 | `src/Api/SlackApiClientInterface.php` | Web API client | FR-API-001 |
 | `src/Api/SlackApiException.php` | Web API client | FR-API-001 |
@@ -65,6 +67,7 @@
 | `src/Credentials/SlackInstallation.php` | Credentials and stores | FR-CRED-001 |
 | `src/Credentials/SlackInstallationKey.php` | Credentials and stores | FR-CRED-001 |
 | `src/Credentials/SlackInstallationStoreInterface.php` | Credentials and stores | FR-CRED-001 |
+| `src/Test/SlackInstallationStoreContractTestCase.php` | Credentials and stores | FR-CRED-002 |
 
 ## Signed ingress
 
@@ -74,6 +77,7 @@
 | `src/Ingress/HandleSlackEvent.php` | Signed ingress | FR-ING-001 |
 | `src/Ingress/IngressController.php` | Signed ingress | FR-ING-001 |
 | `src/Ingress/ReplayGuard.php` | Signed ingress | FR-ING-001 |
+| `src/Ingress/ResolvedSigningSecret.php` | Signed ingress | FR-ING-001 |
 | `src/Ingress/SignatureVerifier.php` | Signed ingress | FR-ING-001 |
 | `src/Ingress/SigningSecretResolverInterface.php` | Signed ingress | FR-ING-001 |
 | `src/Ingress/UnverifiedPayloadPeek.php` | Signed ingress | FR-ING-001 |

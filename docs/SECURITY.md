@@ -19,18 +19,22 @@ Report vulnerabilities as described in [.github/SECURITY.md](../.github/SECURITY
 ## Audit status
 
 The `v1.0.0` tag waits for an **independent REQ-SEC-004 audit** whose scope is the threat table below (contract §15),
-recorded as an appendix of `BUNDLES_SECURITY_ANALYSIS.md`. Until then the code on `main` is a release candidate.
+recorded as an appendix of `BUNDLES_SECURITY_ANALYSIS.md`. The first audit (appendix FS, at `3a490ab`) rated the
+initial import **Medium**; every finding (FS-M1, FS-L1–FS-L4) and the Infos FS-I2–FS-I5, FS-I7–FS-I9, FS-I11 and
+FS-I12 are addressed on `fix/sec-004-fs` (see [CHANGELOG.md](CHANGELOG.md)). A delta audit follows before the tag.
+Until then the code on `main` is a release candidate.
 
 ## Threat model and controls
 
 | Area | Threat | Control |
 | --- | --- | --- |
 | Forged interaction | An attacker POSTs a fake click to the public endpoint | HMAC v0 over the raw body with the app's signing secret, `hash_equals`, 401 with a fixed body |
-| Replay | A captured signed request is sent again within the window | Signature memory for 2 × `max_skew_seconds` (`ReplayGuard`); `event_id` de-duplication for 1 h; window ≤ 300 s on `ClockInterface` |
+| Replay | A captured signed request is sent again within the window, even in parallel | Atomic `symfony/lock` claim of the signature for 2 × `max_skew_seconds` (`ReplayGuard`, keyed on the signature alone); `event_id` claimed for 1 h; only expiring shared lock stores (Redis, Memcached, PDO, Doctrine DBAL, MongoDB, DynamoDB) build in production, local and session-scoped (`+advisory`, `zookeeper`) ones fail; window ≤ 300 s on `ClockInterface` |
 | Stale request | An old request replayed after the memory TTL | The timestamp window refuses it before the memory matters |
 | Forged buttons via a leaked incoming webhook | A message with buttons posted to a channel, clicked by a real user, signed by Slack | `nsk1` values MAC-signed with a key derived from `kernel.secret`, bound to the `action_id`, with expiry and optional workspace; legacy mode time-boxed by `legacy_until` |
 | Cross-workspace / cross-app click | A click from another workspace or app that only shares the URL | `team.id` must be the installation's workspace (a missing workspace id refuses every click) and `api_app_id` must match `apps.*.app_id` when set; `t` inside signed values |
 | Actor impersonation | Typing someone else's Slack id; a suspended account keeps acting | Actor = verified link + active account + same workspace (`ActorResolver`); handlers authorise with the actor's own access |
+| Actor spoofing through a host-resolved secret (FS-M1) | A holder of a per-destination signing secret signs a click with the installation's `team.id` and a verified member's `user.id` | Resolver-verified clicks get no actor (`requiresActor` handlers answer 403), legacy unsigned values and link confirmations are refused on them; opt-in `ingress.resolver_actors` only with a `ResolvedSigningSecret` bound to the click's workspace |
 | Id squatting | An unverified typed id blocks its owner | Claims expire after `claim_ttl` (24 h), an e-mail-proven claim releases them at once, verified links are never released |
 | DM harassment / tier exhaustion | Unlimited confirmation DMs to any member | `confirmation_per_account` and `confirmation_per_target` limiters (3/h each); a refusal sends nothing |
 | Linking enumeration | Learning which account holds a Slack id | `IN_USE` names nobody; `claim_per_account` limiter (10/h) |
@@ -39,10 +43,11 @@ recorded as an appendix of `BUNDLES_SECURITY_ANALYSIS.md`. Until then the code o
 | DoS on ingress | Huge or many bodies | `Content-Length` and a capped read before any parsing (413); cheap header checks first; at most `max_secret_candidates` secrets tried; put a proxy rate limit in front |
 | Secret selection by unverified input | The payload picks a secret; the attacker probes | Bounded `UnverifiedPayloadPeek` exposing only host-declared fields matching a regex; candidate cap; identical 401 for every failure |
 | SSRF | The client pointed elsewhere | Constant `https://slack.com/api/`; `IncomingWebhookClient` accepts only `https://hooks.slack.com/services/…`; `max_redirects: 0` |
-| Token leak | Token in logs, exceptions, profiler, queues, URLs | `SlackSecret` value objects, `SecretRedactor`, `Authorization` header only, no secrets in Messenger messages or events |
+| Token leak | Token or webhook URL in logs, exceptions, profiler, queues, URLs | `SlackSecret` value objects, `Authorization` header only, no secrets in Messenger messages or events; webhooks through a logger-free, untraced HttpClient; `transport_error` keeps only a `RedactedTransportException` (`SecretRedactor`) as `previous` |
 | Token at rest | A database dump reveals tokens | Store contract (encryption at rest); the InstanceSettings store encrypts secrets |
 | Revoked token | The app keeps using a dead token | `app_uninstalled` / `tokens_revoked` mark the installation revoked; auth errors dispatch `SlackInstallationUnhealthyEvent` |
-| mrkdwn injection | `<!channel>` or fake links in user text | `Mrkdwn::escape()` on builder text by default; links built only from checked parts |
+| mrkdwn injection | `<!channel>` or fake links in user text | `Mrkdwn::escape()` on builder text and on the fallback `text` (and the Notifier subject) by default; `rawText: true` only for `Mrkdwn`-built text; links built only from checked parts |
+| Weak button key | A default or short `kernel.secret` lets anyone forge `nsk1` values | HKDF key; a `kernel.secret` under 32 bytes or a known placeholder logs `reason: weak_kernel_secret` |
 | CSRF | Account link POSTs, *Test connection* | FormKit CSRF tokens on every state-changing POST (REQ-SEC-005); the ingress is CSRF-free because it is signed |
 | Admin UI authorisation | Low-privilege access to the settings | InstanceSettings access checker on the section and *Test connection* (deny by default) |
 | Worker state | Token, installation or actor reused across requests | Stateless services; the reply buffer is reset on `kernel.reset`; Igor audit (REQ-CS-008) |
@@ -55,10 +60,20 @@ recorded as an appendix of `BUNDLES_SECURITY_ANALYSIS.md`. Until then the code o
 3. `X-Slack-Request-Timestamp` (digits) and `X-Slack-Signature` (`v0=` + 64 hex), and the timestamp window, else 401.
 4. The app's signing secret; for the default interactions route, then the host resolver candidates.
 5. `v0=` HMAC-SHA256(secret, `v0:<ts>:<raw body>`) with `hash_equals`, else 401.
-6. Replay memory (an atomic-enough check-then-set on the pool), else 401 with the same body.
+6. Replay: an atomic `symfony/lock` claim of the signature (`acquire(false)` on a never-released, expiring key),
+   else 401 with the same body.
 7. JSON decode (depth 32), else 400.
-8. Workspace and app id, else 403.
+8. Workspace and app id, else 403. Skipped for resolver-verified clicks, which therefore get **no actor** (unless
+   `ingress.resolver_actors` and a workspace-bound `ResolvedSigningSecret` matching the click's `team.id`). Legacy
+   unsigned values and link confirmations are **always** refused on resolver-verified clicks, with or without the
+   opt-in: the opt-in only restores the actor.
 9. Routing; button value verification (§ below), else 403.
+
+Events API: the `event_id` is claimed after the workspace check; when handling fails the claim is released and the
+endpoint answers 500, so Slack's retry (same `event_id`) is handled. Delivery is therefore **at-least-once**: a
+handler that applied side effects and then failed runs them again on the retry, and a slow handler that fails after
+Slack's retry was already answered 200 loses the event (Slack does not retry again). Keep event handlers idempotent
+and prefer `ingress.async: true`.
 
 Logs carry the route, the app name and a reason code (`headers`, `signature`, `replay`, `team`, `app_id`), never a
 body, header or signature.
@@ -66,7 +81,7 @@ body, header or signature.
 ## Button values (nsk1)
 
 - Key: HKDF-SHA256(`kernel.secret`, salt empty, info `nowo_slack_kit.button.v1`, 32 bytes), held in a `SlackSecret`.
-  Rotating `kernel.secret` invalidates posted buttons unless the old value is listed in
+  A `kernel.secret` under 32 bytes or a known placeholder logs a warning (`reason: weak_kernel_secret`). Rotating `kernel.secret` invalidates posted buttons unless the old value is listed in
   `interactions.previous_secrets` (verify-only, `%env()%` only).
 - MAC: first 16 bytes (128 bits) of HMAC-SHA256 over `nsk1\n<action_id>\n<payload_b64>`, compared with `hash_equals`
   on bytes; all keys are tried without an early exit. Forgery is only possible online, one Slack-signed click at a
@@ -84,6 +99,8 @@ body, header or signature.
 - Limiters: claim 10/h per account, e-mail lookup 5/h per account, confirmation 3/h per account and 3/h per target
   Slack id. A refusal sends nothing.
 - Results never reveal the account that holds an id.
+- Unsigned legacy confirmations are never accepted: mapping a legacy action to `nowo_slack_kit.link.confirm` fails
+  the build. Resolver-verified clicks never confirm a link.
 
 ## Secrets and logging
 
@@ -95,14 +112,24 @@ body, header or signature.
   `reason`, `account_id`. Never tokens, secrets, signatures, raw bodies, payload JSON, message text, e-mails or webhook
   URLs.
 - `SecretRedactor::redact()` / `redactArray()` scrub `xox?-…`, `xoxe…`, `xapp-…`, `Bearer …`,
-  `hooks.slack.com/…` paths and `client_secret=` / `signing_secret=` / `token=` / `code=` / `state=` values.
+  `hooks.slack.com/…` paths and `client_secret=` / `signing_secret=` / `token=` / `code=` / `state=` values. Both
+  clients use it for the `previous` of `transport_error` (`RedactedTransportException`: the HttpClient exception's
+  class and redacted message, no further chain), so an incoming-webhook URL or a token in a vendor message never
+  reaches logs, the Messenger failure transport or error pages.
+- Incoming-webhook posts use their own HttpClient (`nowo_slack_kit.webhook_http_client`, `HttpClient::create()`):
+  no logger (Symfony's `http_client` logger would write `Request: "POST <webhook URL>"`) and not traced by the
+  profiler.
+- **Dev profiler:** the HttpClient panel and its "copy as cURL" export show the raw `Authorization: Bearer xoxb-…`
+  header of Web API calls. That is dev-only tooling; never enable the profiler (or `framework.http_client` tracing)
+  in production. Webhook calls are not traced.
 - Exception messages are `Slack API error: <code>`; transport exceptions are kept as `previous` and never carry the
   token (it lives only in a request header).
 - If you log HTTP traffic (for example with HttpLogBundle), mask the `Authorization` and `X-Slack-Signature` headers.
 
 ## Installation store contract
 
-Host stores (`SlackInstallationStoreInterface`) must:
+The contract is shipped as an abstract PHPUnit test case, `Nowo\SlackKitBundle\Test\SlackInstallationStoreContractTestCase`
+(see [USAGE.md](USAGE.md#testing-your-installation-store)). Host stores (`SlackInstallationStoreInterface`) must:
 
 1. encrypt tokens and secrets at rest with an AEAD and a key that is not stored with the database; never write
    plaintext to a column, cache, log, queue or dump;
@@ -116,16 +143,30 @@ bot token.
 
 ## Residual risks
 
-- **Replay memory is best effort** on cache adapters without an atomic add: two workers can both accept the same
-  request in the same instant. With an `ArrayAdapter` (or a per-host filesystem pool) the memory is per process or
-  per host; use a shared pool (Redis, PDO) in production (the bundle logs a warning, `reason: array_pool`, for an
-  `ArrayAdapter` in `prod`). Handlers must be idempotent anyway.
+- **Replay memory needs an expiring shared lock store.** Outside debug and test only an allowlist builds (Redis,
+  Memcached, PDO, Doctrine DBAL, MongoDB, DynamoDB; `CombinedStore` members checked recursively). Local stores
+  (`flock`, `semaphore`, `in-memory`, `null`), session-scoped ones whose locks ignore the TTL (`pgsql+advisory:`,
+  `postgres(ql)+advisory://` advisory locks, `zookeeper://` ephemeral nodes) and unknown stores fail the build; a
+  store DSN from an environment variable is checked at runtime by the same allowlist (ingress requests fail with
+  500). A custom `replay_lock_factory` whose store the bundle cannot see at all is trusted as configured. Handlers
+  must be idempotent anyway.
 - **Two replay memories during an adoption.** A host that already remembered signatures in its own store does not
   share that memory with the bundle, so a request captured in the minutes before the deploy could be replayed once
   after it. Accepted because handlers are idempotent.
 - **Slack user ids are not secret.** The limiters, not secrecy, protect linking.
 - **Legacy unsigned values** are accepted while `interactions.legacy_until` is in the future (actor and ingress
-  checks still apply). Set it to a fixed instant and let it pass.
+  checks still apply; never on resolver-verified clicks). `legacy_until` must be a strict UTC instant
+  (`2026-12-05T00:00:00Z`): relative strings fail the build, and an environment value in another form turns legacy
+  off. Set it to a fixed instant and let it pass.
+- **Forged legacy buttons during the window (FS-I3).** While `legacy_until` is in the future, anyone who holds a
+  **main-app** incoming-webhook URL can post unsigned legacy buttons that a real, verified member may then click; the
+  click runs with that member's actor. This is the forged-buttons threat of the threat table, time-boxed by design:
+  keep the window short and keep webhook URLs secret.
+- **Resolver actors are an explicit trust decision.** With `ingress.resolver_actors: true`, every holder of a
+  workspace-bound destination secret can sign clicks as any member of that workspace. Off by default. The binding is
+  only as good as its source: the bound team must be **host-verified** (`auth.test` with the destination's own bot
+  token, OAuth, or an operator) and never a value typed or chosen by whoever holds or pasted the destination secret,
+  otherwise that person picks the workspace and the actor spoofing of FS-M1 returns.
 - **Link confirmations without `c` (interim decision, aligned with symfony-beacon 1.122.1).** Beacon has no nonce
   store, so its 1.122.1 confirmation buttons carry `{acc, uid}` without a nonce `n` and without `c`. The bundle
   accepts such signed values only while `legacy_until` is set and in the future. During that window a `c`-less value
@@ -141,9 +182,13 @@ bot token.
 ## Host responsibilities
 
 - Put the ingress paths under a firewall with `security: false` and a proxy rate limit.
-- Use a shared `ingress.replay_cache_pool` in production.
+- Point `ingress.replay_lock_factory` at a dedicated `framework.lock` resource (for example `lock.slack_kit.factory`
+  with `%env(SLACK_KIT_LOCK_DSN)%`) on an expiring shared store: Redis, or a DBAL / PDO DSN without `+advisory`.
+- Use a random `kernel.secret` of at least 32 bytes; never enable the profiler in production.
+- Extend `SlackInstallationStoreContractTestCase` in your test suite when you write your own installation store.
 - Keep `team_id` set (the settings notice warns when it is missing; clicks are refused without it).
-- Authorise every handler with the actor's own access; keep handlers idempotent.
+- Authorise every handler with the actor's own access; keep handlers idempotent (Events API delivery is
+  at-least-once).
 - Keep incoming-webhook URLs and per-destination signing secrets encrypted.
 - Disclose what goes to Slack (DMs, e-mail lookup) in the privacy notice; export and erase the Slack columns of your
   accounts with the rest of the personal data.

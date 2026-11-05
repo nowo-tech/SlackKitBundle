@@ -33,13 +33,16 @@ final class SlackKitTestKernel extends Kernel
     /**
      * @param Closure(ContainerConfigurator): void $services
      * @param Closure(RoutingConfigurator): void $routes
+     * @param array<string, mixed> $framework extra FrameworkBundle configuration
      */
     public function __construct(
         private readonly string $id,
         private readonly Closure $services,
         private readonly Closure $routes,
+        string $environment = 'test',
+        private readonly array $framework = [],
     ) {
-        parent::__construct('test', false);
+        parent::__construct($environment, false);
     }
 
     public function registerBundles(): iterable
@@ -91,7 +94,7 @@ final class SlackKitTestKernel extends Kernel
             'session'               => ['storage_factory_id' => 'session.storage.factory.mock_file'],
             'translator'            => ['fallbacks' => ['en']],
             'router'                => ['utf8' => true],
-        ]);
+        ] + $this->framework);
         $container->extension('twig', ['strict_variables' => true]);
         $container->extension('doctrine', ['dbal' => ['url' => 'sqlite:///:memory:'], 'orm' => []]);
         $container->extension('nowo_doctrine_encrypt', [

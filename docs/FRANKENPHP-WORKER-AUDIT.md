@@ -57,7 +57,10 @@ A bundle safe under **B** is safe under **A**, classic mode and PHP-FPM.
 
 ## Usage recommendations in worker mode
 
-- Use a shared `ingress.replay_cache_pool` (Redis, PDO): an array pool only remembers signatures per worker.
+- Point `ingress.replay_lock_factory` at a dedicated `framework.lock` resource on an expiring shared store
+  (Redis, Memcached, PDO, Doctrine DBAL, MongoDB, DynamoDB). Local stores only protect one worker or host, and
+  session-scoped ones (`pgsql+advisory`, `zookeeper`) pile up locks held until the worker restarts; both fail the
+  production build.
 - Host handlers, identity stores and signing-secret resolvers must be stateless too; read accounts and secrets per
   call.
 - Do not cache `SlackInstallation` objects or revealed secrets in host services.

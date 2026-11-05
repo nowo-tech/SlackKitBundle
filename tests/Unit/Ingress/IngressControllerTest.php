@@ -14,6 +14,7 @@ use Nowo\SlackKitBundle\Event\SlackInteractionReceivedEvent;
 use Nowo\SlackKitBundle\Id\SlackTeamId;
 use Nowo\SlackKitBundle\Id\SlackUserId;
 use Nowo\SlackKitBundle\Ingress\HandleSlackEvent;
+use Nowo\SlackKitBundle\Ingress\ResolvedSigningSecret;
 use Nowo\SlackKitBundle\Ingress\SigningSecretResolverInterface;
 use Nowo\SlackKitBundle\Ingress\UnverifiedPayloadPeek;
 use Nowo\SlackKitBundle\Linking\SlackLink;
@@ -21,6 +22,7 @@ use Nowo\SlackKitBundle\Security\SlackSecret;
 use Nowo\SlackKitBundle\Tests\Support\Fake;
 use Nowo\SlackKitBundle\Tests\Support\Ingress;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -323,6 +325,96 @@ final class IngressControllerTest extends TestCase
         self::assertSame('default', $message->app);
         self::assertSame(['async'], $bus->sent[0]->last(TransportNamesStamp::class)?->getTransportNames());
         self::assertSame([], $ingress->events->of(SlackEventReceivedEvent::class), 'handled by the worker');
+    }
+
+    public function testAFailedEventIsReleasedSoSlackRetriesAreHandled(): void
+    {
+        $bus = new class implements MessageBusInterface {
+            public int $calls = 0;
+
+            public function dispatch(object $message, array $stamps = []): Envelope
+            {
+                if (++$this->calls === 1) {
+                    throw new RuntimeException('transport down');
+                }
+
+                return Envelope::wrap($message, $stamps);
+            }
+        };
+        $ingress = new Ingress(bus: $bus);
+        $event   = (string) json_encode(['type' => 'event_callback', 'team_id' => Fake::TEAM, 'api_app_id' => Fake::APP_ID, 'event_id' => 'Ev00000003', 'event_time' => Fake::NOW, 'event' => ['type' => 'app_uninstalled']]);
+
+        self::assertSame(500, $ingress->controller->events($this->raw($event, Fake::signed($event), 'application/json'))->getStatusCode());
+        self::assertContains('Slack event handling failed.', $ingress->logger->messages());
+        // Slack's retry: same event_id, new timestamp and signature.
+        self::assertSame(200, $ingress->controller->events($this->raw($event, Fake::signed($event, Fake::NOW + 5), 'application/json'))->getStatusCode());
+        self::assertSame(2, $bus->calls);
+    }
+
+    /**
+     * Audit FS-M1 regression (from the PoC): whoever holds a destination secret signs any team.id / user.id.
+     */
+    public function testResolverSecretHolderCannotImpersonateAVerifiedActor(): void
+    {
+        $resolver = new class implements SigningSecretResolverInterface {
+            public function candidates(UnverifiedPayloadPeek $peek): iterable
+            {
+                if ($peek->actionDataString('d', '/^dest-\d$/') !== null) {
+                    yield SlackSecret::signingSecret(Fake::OTHER_SECRET);
+                }
+            }
+        };
+        $ingress = new Ingress(resolver: $resolver);
+        $this->link($ingress); // acc-1 is a verified member (U00000001) of the installation workspace
+
+        // A genuine value from the destination channel, a forged installation team and the victim's user id.
+        $value = $ingress->codec->sign('beacon.issue.resolve', ['d' => 'dest-1', 'i' => 'issue-9']);
+        $body  = Fake::form(Fake::blockActions('beacon.issue.resolve', $value, Fake::TEAM, Fake::USER));
+        $r     = $ingress->controller->interactions($this->raw($body, Fake::signed($body, Fake::NOW, Fake::OTHER_SECRET)));
+        self::assertSame(403, $r->getStatusCode());
+        self::assertSame('Link and confirm your Slack account', $r->getContent());
+        self::assertSame([], $ingress->handler->seen, 'the requiresActor handler never runs');
+
+        // Legacy unsigned values are refused on resolver-verified requests, even inside the legacy window.
+        $legacy = Fake::form(Fake::blockActions('whatever', (string) json_encode(['a' => 'resolve', 'd' => 'dest-1', 'i' => 'any-issue']), Fake::TEAM, Fake::USER));
+        $r2     = $ingress->controller->interactions($this->raw($legacy, Fake::signed($legacy, Fake::NOW + 1, Fake::OTHER_SECRET)));
+        self::assertSame(403, $r2->getStatusCode());
+        self::assertSame('Button no longer valid', $r2->getContent());
+        self::assertSame([], $ingress->handler->seen);
+    }
+
+    public function testResolverActorsNeedTheOptInAndABoundMatchingWorkspace(): void
+    {
+        $bound = new class implements SigningSecretResolverInterface {
+            public function candidates(UnverifiedPayloadPeek $peek): iterable
+            {
+                yield new ResolvedSigningSecret(SlackSecret::signingSecret(Fake::OTHER_SECRET), SlackTeamId::fromString(Fake::TEAM));
+            }
+        };
+        $click = function (Ingress $ingress, string $team, int $ts): int {
+            $body = Fake::form(Fake::blockActions('beacon.issue.resolve', $ingress->codec->sign('beacon.issue.resolve', ['d' => 'dest-1']), $team, Fake::USER));
+
+            return $ingress->controller->interactions($this->raw($body, Fake::signed($body, $ts, Fake::OTHER_SECRET)))->getStatusCode();
+        };
+
+        $off = new Ingress(resolver: $bound);
+        $this->link($off);
+        self::assertSame(403, $click($off, Fake::TEAM, Fake::NOW), 'opt-in off');
+
+        $on = new Ingress(resolver: $bound, resolverActors: true);
+        $this->link($on);
+        self::assertSame(200, $click($on, Fake::TEAM, Fake::NOW), 'bound workspace = click workspace');
+        self::assertSame('acc-1', $on->handler->seen[0]->actor?->accountId);
+        self::assertSame(403, $click($on, Fake::OTHER_TEAM, Fake::NOW + 1), 'bound workspace differs');
+
+        $unbound = new Ingress(resolver: new class implements SigningSecretResolverInterface {
+            public function candidates(UnverifiedPayloadPeek $peek): iterable
+            {
+                yield SlackSecret::signingSecret(Fake::OTHER_SECRET);
+            }
+        }, resolverActors: true);
+        $this->link($unbound);
+        self::assertSame(403, $click($unbound, Fake::TEAM, Fake::NOW), 'a plain secret is not bound to a workspace');
     }
 
     private function link(Ingress $ingress, ?DateTimeImmutable $verifiedAt = new DateTimeImmutable('@1')): void

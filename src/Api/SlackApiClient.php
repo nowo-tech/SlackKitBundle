@@ -192,7 +192,7 @@ final readonly class SlackApiClient implements SlackApiClientInterface
             }
             $content = $response->getContent(false);
         } catch (ExceptionInterface $e) {
-            throw new SlackApiException('transport_error', $e);
+            throw new SlackApiException('transport_error', RedactedTransportException::from($e));
         }
 
         try {

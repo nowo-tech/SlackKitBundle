@@ -8,6 +8,7 @@ use JsonException;
 use Nowo\SlackKitBundle\Id\SlackTeamId;
 use Nowo\SlackKitBundle\Security\SlackSecret;
 use Psr\Clock\ClockInterface;
+use Psr\Log\LoggerInterface;
 use SensitiveParameter;
 use stdClass;
 
@@ -57,6 +58,9 @@ final readonly class ButtonValueCodec
     /** MAC length in bytes (128 bits). */
     public const MAC_BYTES = 16;
 
+    /** Shortest `kernel.secret` accepted without a warning, in bytes. */
+    public const MIN_KERNEL_SECRET_BYTES = 32;
+
     /** Largest canonical payload JSON a producer may sign, in bytes (§6.5.4). */
     public const MAX_PAYLOAD_JSON_BYTES = 1400;
 
@@ -92,6 +96,20 @@ final readonly class ButtonValueCodec
     public static function deriveKey(#[SensitiveParameter] string $kernelSecret): SlackSecret
     {
         return SlackSecret::key(hash_hkdf('sha256', $kernelSecret, 32, self::KEY_INFO, ''));
+    }
+
+    /**
+     * {@see self::deriveKey()} for `kernel.secret`, logging a warning when the secret is short (under 32 bytes) or a
+     * known placeholder: anyone who knows it can forge every `nsk1` value (audit FS-I11).
+     */
+    public static function deriveCheckedKey(#[SensitiveParameter] string $kernelSecret, ?LoggerInterface $logger = null): SlackSecret
+    {
+        $placeholder = preg_match('/^(change.?this|changeme|secret|demo.?secret|test.?secret|thisisnotsecret|ThisTokenIsNotSoSecretChangeIt)/i', $kernelSecret) === 1;
+        if ($placeholder || strlen($kernelSecret) < self::MIN_KERNEL_SECRET_BYTES) {
+            $logger?->warning('kernel.secret is short or a placeholder: signed Slack button values can be forged. Use a random value of at least 32 bytes.', ['reason' => 'weak_kernel_secret']);
+        }
+
+        return self::deriveKey($kernelSecret);
     }
 
     /**

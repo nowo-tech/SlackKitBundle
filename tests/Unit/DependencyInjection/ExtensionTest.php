@@ -6,6 +6,7 @@ namespace Nowo\SlackKitBundle\Tests\Unit\DependencyInjection;
 
 use LogicException;
 use Nowo\InstanceSettingsBundle\Settings\InstanceSettingsInterface;
+use Nowo\SlackKitBundle\Api\IncomingWebhookClient;
 use Nowo\SlackKitBundle\Controller\AccountLinkController;
 use Nowo\SlackKitBundle\Controller\TestConnectionController;
 use Nowo\SlackKitBundle\Credentials\InMemoryInstallationStore;
@@ -17,7 +18,9 @@ use Nowo\SlackKitBundle\DependencyInjection\Configuration;
 use Nowo\SlackKitBundle\DependencyInjection\NowoSlackKitExtension;
 use Nowo\SlackKitBundle\Ingress\EventsHandler;
 use Nowo\SlackKitBundle\Ingress\IngressController;
+use Nowo\SlackKitBundle\Ingress\ReplayGuard;
 use Nowo\SlackKitBundle\Interaction\AsSlackActionHandler;
+use Nowo\SlackKitBundle\Interaction\ButtonValueCodec as ButtonValueCodecAlias;
 use Nowo\SlackKitBundle\Interaction\InteractionRouter;
 use Nowo\SlackKitBundle\Interaction\LegacyValuePolicy;
 use Nowo\SlackKitBundle\Linking\AccountLinker;
@@ -36,6 +39,7 @@ use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Extension\Extension;
 use Symfony\Component\DependencyInjection\ParameterBag\EnvPlaceholderParameterBag;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBag;
+use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Notifier\Transport\TransportFactoryInterface;
 use Throwable;
@@ -122,6 +126,10 @@ final class ExtensionTest extends TestCase
         yield 'linking without services' => [['linking' => ['enabled' => true]], InvalidConfigurationException::class];
         yield 'legacy without cutoff' => [['interactions' => ['legacy_value_key' => 'a', 'legacy_action_map' => ['resolve' => 'x.y']]], InvalidConfigurationException::class];
         yield 'legacy bad cutoff' => [['interactions' => ['legacy_value_key' => 'a', 'legacy_until' => 'not a date', 'legacy_action_map' => ['r' => 'x']]], InvalidConfigurationException::class];
+        yield 'legacy relative cutoff (FS-L4)' => [['interactions' => ['legacy_value_key' => 'a', 'legacy_until' => '+30 days', 'legacy_action_map' => ['r' => 'x']]], InvalidConfigurationException::class];
+        yield 'legacy cutoff without zone' => [['interactions' => ['legacy_until' => '2026-12-05T00:00:00']], InvalidConfigurationException::class];
+        yield 'legacy cutoff in another zone' => [['interactions' => ['legacy_until' => '2026-12-05T00:00:00+01:00']], InvalidConfigurationException::class];
+        yield 'legacy map to link confirm (FS-I4)' => [['interactions' => ['legacy_value_key' => 'a', 'legacy_until' => '2026-12-05T00:00:00Z', 'legacy_action_map' => ['link_confirm' => 'nowo_slack_kit.link.confirm']]], InvalidConfigurationException::class];
         yield 'instance settings missing' => [[], LogicException::class, ['Nope\\Missing']];
         yield 'async without messenger' => [['ingress' => ['async' => true]], LogicException::class, [1 => 'Nope\\Missing']];
         yield 'notifier missing' => [['notifier' => ['enabled' => true]], LogicException::class, [2 => 'Nope\\Missing']];
@@ -147,6 +155,20 @@ final class ExtensionTest extends TestCase
 
         $fromEnv = $this->load(['interactions' => ['legacy_value_key' => 'a', 'legacy_until' => '%env(SLACK_LEGACY_UNTIL)%', 'legacy_action_map' => ['resolve' => 'beacon.issue.resolve']]]);
         self::assertTrue($fromEnv->hasDefinition(LegacyValuePolicy::class), 'legacy_until may come from SLACK_LEGACY_UNTIL');
+    }
+
+    public function testHardenedWiring(): void
+    {
+        $container = $this->load(['rate_limit' => ['max_attempts' => 5], 'ingress' => ['resolver_actors' => true], 'interactions' => ['legacy_until' => '2026-12-05T00:00:00+00:00']]);
+        self::assertSame([5], $container->getDefinition(NowoSlackKitExtension::RETRY_MIDDLEWARE)->getArguments());
+        $webhook = $container->getDefinition(NowoSlackKitExtension::WEBHOOK_HTTP_CLIENT);
+        self::assertSame([HttpClient::class, 'create'], $webhook->getFactory());
+        self::assertSame([], $webhook->getTags(), 'not traced by the profiler, no logger');
+        self::assertSame(NowoSlackKitExtension::WEBHOOK_HTTP_CLIENT, (string) $container->getDefinition(IncomingWebhookClient::class)->getArgument(0));
+        self::assertSame('lock.factory', (string) $container->getDefinition(ReplayGuard::class)->getArgument(0));
+        $ingress = $container->getDefinition(IngressController::class)->getArguments();
+        self::assertTrue(end($ingress));
+        self::assertSame([ButtonValueCodecAlias::class, 'deriveCheckedKey'], $container->getDefinition(NowoSlackKitExtension::BUTTON_KEY)->getFactory());
     }
 
     public function testAttributeAutoconfigurationAndDisabledTestConnection(): void

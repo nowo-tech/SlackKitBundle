@@ -119,7 +119,8 @@ final class AccountLinkerTest extends TestCase
         self::assertSame(200, $open->confirm($this->interaction(['acc' => 'acc-1', 'uid' => Fake::USER]))->status, 'pre-adoption Beacon button (acc, uid, no c)');
         $this->identities->removeLink('acc-1');
         $open->claim('acc-1', Fake::USER);
-        self::assertSame(200, $open->confirm($this->interaction(['u' => 'acc-1', 's' => Fake::USER], legacy: true))->status, 'legacy unsigned button');
+        self::assertSame(403, $open->confirm($this->interaction(['u' => 'acc-1', 's' => Fake::USER], legacy: true))->status, 'unsigned legacy confirmations are never accepted (FS-I4)');
+        self::assertSame(403, $open->confirm($this->interaction(['acc' => 'acc-1', 'c' => Fake::NOW, 'uid' => Fake::USER], resolver: true))->status, 'resolver-verified click (FS-M1)');
         $this->clock->sleep(60);
         self::assertSame(403, $open->confirm($this->interaction(['acc' => 'acc-1', 'uid' => Fake::USER]))->status, 'c required after the cutoff');
     }
@@ -282,8 +283,8 @@ final class AccountLinkerTest extends TestCase
     /**
      * @param array<string, mixed> $data
      */
-    private function interaction(array $data, ?string $clicker = Fake::USER, string $team = Fake::TEAM, bool $legacy = false): SlackInteraction
+    private function interaction(array $data, ?string $clicker = Fake::USER, string $team = Fake::TEAM, bool $legacy = false, bool $resolver = false): SlackInteraction
     {
-        return new SlackInteraction(SlackInstallationKey::default(), AccountLinker::CONFIRM_ACTION, $data, SlackTeamId::fromString($team), $clicker !== null ? SlackUserId::fromString($clicker) : null, null, SlackChannelId::fromString(Fake::DM), '1.0', 'id', $legacy);
+        return new SlackInteraction(SlackInstallationKey::default(), AccountLinker::CONFIRM_ACTION, $data, SlackTeamId::fromString($team), $clicker !== null ? SlackUserId::fromString($clicker) : null, null, SlackChannelId::fromString(Fake::DM), '1.0', 'id', $legacy, $resolver);
     }
 }
