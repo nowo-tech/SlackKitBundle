@@ -1,0 +1,18 @@
+# Demo: every value is fake and every Slack call goes to the in-app fake Slack (App\FakeSlack\FakeSlackApi, wired as
+# the HttpClient mock_response_factory in framework.yaml). Credentials live in the `slack` instance settings section
+# (seeded by `make seed`). A real host sets its own identity store and account resolver (see docs/USAGE.md).
+nowo_slack_kit:
+    credentials:
+        store: instance_settings
+    ingress:
+        events_enabled: true
+    interactions:
+        value_ttl: P30D
+        previous_secrets: []
+        legacy_until: null
+    linking:
+        enabled: true
+        identity_store: App\Slack\DemoIdentityStore
+        account_resolver: App\Slack\DemoAccountResolver
+        email_lookup: true
+        return_route: demo_home

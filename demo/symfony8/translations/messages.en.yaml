@@ -1,0 +1,14 @@
+site:
+  label: Site
+  intro: Site-wide values read by the application on every request.
+  name: Site name
+  footer: Footer text
+  footer_help: Shown at the bottom of every page.
+  support_url: Support URL
+  page_size: Rows per page
+  page_size_help: Between 5 and 200.
+  theme: Theme
+  theme_light: Light
+  theme_dark: Dark
+  theme_auto: Follow the system
+  maintenance_banner: Show the maintenance banner (instance-only, never exported)

@@ -1,0 +1,11 @@
+framework:
+  secret: '%env(APP_SECRET)%'
+  http_method_override: false
+  session:
+    enabled: true
+  csrf_protection: true
+  php_errors:
+    log: true
+  # Demo: no request ever leaves the container; the fake Slack answers the bundle's Web API calls.
+  http_client:
+    mock_response_factory: App\FakeSlack\FakeSlackApi

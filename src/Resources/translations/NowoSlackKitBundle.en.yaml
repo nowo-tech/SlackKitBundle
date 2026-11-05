@@ -1,0 +1,58 @@
+settings:
+    slack:
+        label: "Slack"
+        intro: "The Slack app that sends direct messages and receives button clicks. Paste this Interactivity URL in the Slack app: %url%"
+        bot_token: "Bot token"
+        bot_token_help: "xoxb-… with the scopes chat:write and im:write (users:read.email for \"Find me by e-mail\"). Stored encrypted."
+        signing_secret: "Signing secret"
+        signing_secret_help: "Verifies that requests come from Slack. Stored encrypted."
+        team_id: "Workspace id"
+        team_id_help: "T…; requests from any other workspace are refused. \"Test connection\" fills it in."
+        allow_email_lookup: "Allow \"Find me by e-mail\""
+        allow_email_lookup_help: "Sends the member's e-mail to Slack (users.lookupByEmail) to find their Slack id. Mention it in your privacy notice."
+        test_connection: "Test connection"
+        notice_off: "Slack is not configured: save a bot token and a signing secret."
+        notice_no_team: "The workspace id is missing: button clicks are refused until it is set (\"Test connection\" fills it in)."
+flash:
+    test_rate_limited: "Too many connection tests. Try again later."
+    test_failed: "Slack refused the connection test: %error%."
+    test_ok: "Connected to %team% (%team_id%) as %bot%."
+link:
+    card:
+        title: "Slack"
+        intro: "Link your Slack account to receive direct messages and act from Slack buttons. Slack asks you to confirm the link."
+    status:
+        none: "Not linked."
+        claimed: "Slack id %id% saved, not confirmed yet: send the confirmation and click Confirm in Slack."
+        verified: "Linked and confirmed: %id%."
+    form:
+        slack_user_id: "Slack member id"
+        slack_user_id_help: "In Slack: your profile → ⋮ → Copy member ID (U…)."
+        submit: "Save"
+    action:
+        find: "Find me by e-mail"
+        confirm: "Send confirmation"
+        unlink: "Unlink"
+        unlink_confirm: "Unlink your Slack account?"
+    result:
+        claimed: "Slack id saved. Send the confirmation to finish linking."
+        found: "Slack found your account. Send the confirmation to finish linking."
+        not_found: "Slack has no member with your e-mail. Enter your member id instead."
+        in_use: "This Slack id is linked to another account."
+        invalid: "Enter a Slack member id (U… or W…)."
+        already_verified: "Your Slack account is already linked and confirmed."
+        unavailable: "Slack linking is not available right now."
+        rate_limited: "Too many attempts. Try again later."
+        confirmation_sent: "Confirmation sent: click Confirm in the Slack direct message."
+        confirmation_failed: "The confirmation could not be sent. Check the Slack id and try again."
+        unlinked: "Your Slack account is unlinked."
+slack:
+    confirm:
+        text: "Is this your Slack account? Click Confirm to link it."
+        button: "Confirm"
+        refused: "This confirmation is not valid for your Slack account."
+        linked: "Your Slack account is linked."
+interaction:
+    link_required: "Link and confirm your Slack account first (account profile)."
+    button_invalid: "This button is no longer valid."
+    error: "Something went wrong. Try again later."

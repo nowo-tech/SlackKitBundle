@@ -1,0 +1,34 @@
+{
+	order mercure after encode
+	skip_install_trust
+	# REQ-RUNTIME-001 timeout hierarchy: Slack Web API calls (nowo_slack_kit.api: 5 s idle / 10 s total)
+	# < PHP max_execution_time (30 s) < Caddy write timeout (40 s); max_wait_time caps the wait for a free thread.
+	servers {
+		timeouts {
+			write 40s
+		}
+	}
+	frankenphp {
+		php_ini max_execution_time 30
+		php_ini max_input_time 30
+		max_wait_time 30s
+	}
+}
+
+# Worker mode: app boots once, handles requests in memory.
+# SlackKit services are stateless (credentials read per call from the store) — safe for worker.
+:80 {
+	root * /app/public
+	encode zstd br gzip
+	mercure {
+		anonymous
+	}
+
+	php_server {
+		hot_reload
+		worker {
+			file /app/public/index.php
+			watch
+		}
+	}
+}

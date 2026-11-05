@@ -1,0 +1,58 @@
+settings:
+    slack:
+        label: "Slack"
+        intro: "Die Slack-App, die Direktnachrichten sendet und Klicks auf Schaltflächen empfängt. Fügen Sie diese Interaktivitäts-URL in der Slack-App ein: %url%"
+        bot_token: "Bot-Token"
+        bot_token_help: "xoxb-… mit den Scopes chat:write und im:write (users:read.email für „Per E-Mail finden“). Wird verschlüsselt gespeichert."
+        signing_secret: "Signaturgeheimnis"
+        signing_secret_help: "Prüft, dass Anfragen von Slack kommen. Wird verschlüsselt gespeichert."
+        team_id: "Workspace-ID"
+        team_id_help: "T…; Anfragen aus anderen Workspaces werden abgelehnt. „Verbindung testen“ füllt es aus."
+        allow_email_lookup: "„Per E-Mail finden“ erlauben"
+        allow_email_lookup_help: "Sendet die E-Mail des Mitglieds an Slack (users.lookupByEmail), um seine Slack-ID zu finden. Erwähnen Sie es in Ihrer Datenschutzerklärung."
+        test_connection: "Verbindung testen"
+        notice_off: "Slack ist nicht konfiguriert: Speichern Sie ein Bot-Token und ein Signaturgeheimnis."
+        notice_no_team: "Die Workspace-ID fehlt: Klicks werden abgelehnt, bis sie gesetzt ist („Verbindung testen“ füllt sie aus)."
+flash:
+    test_rate_limited: "Zu viele Verbindungstests. Versuchen Sie es später erneut."
+    test_failed: "Slack hat den Verbindungstest abgelehnt: %error%."
+    test_ok: "Verbunden mit %team% (%team_id%) als %bot%."
+link:
+    card:
+        title: "Slack"
+        intro: "Verknüpfen Sie Ihr Slack-Konto, um Direktnachrichten zu erhalten und über Slack-Schaltflächen zu handeln. Slack bittet Sie, die Verknüpfung zu bestätigen."
+    status:
+        none: "Nicht verknüpft."
+        claimed: "Slack-ID %id% gespeichert, noch nicht bestätigt: Senden Sie die Bestätigung und klicken Sie in Slack auf Bestätigen."
+        verified: "Verknüpft und bestätigt: %id%."
+    form:
+        slack_user_id: "Slack-Mitglieds-ID"
+        slack_user_id_help: "In Slack: Ihr Profil → ⋮ → Mitglieds-ID kopieren (U…)."
+        submit: "Speichern"
+    action:
+        find: "Per E-Mail finden"
+        confirm: "Bestätigung senden"
+        unlink: "Verknüpfung lösen"
+        unlink_confirm: "Slack-Konto-Verknüpfung lösen?"
+    result:
+        claimed: "Slack-ID gespeichert. Senden Sie die Bestätigung, um die Verknüpfung abzuschließen."
+        found: "Slack hat Ihr Konto gefunden. Senden Sie die Bestätigung, um die Verknüpfung abzuschließen."
+        not_found: "Slack kennt kein Mitglied mit Ihrer E-Mail. Geben Sie stattdessen Ihre Mitglieds-ID ein."
+        in_use: "Diese Slack-ID ist mit einem anderen Konto verknüpft."
+        invalid: "Geben Sie eine Slack-Mitglieds-ID ein (U… oder W…)."
+        already_verified: "Ihr Slack-Konto ist bereits verknüpft und bestätigt."
+        unavailable: "Die Slack-Verknüpfung ist gerade nicht verfügbar."
+        rate_limited: "Zu viele Versuche. Versuchen Sie es später erneut."
+        confirmation_sent: "Bestätigung gesendet: Klicken Sie in der Slack-Direktnachricht auf Bestätigen."
+        confirmation_failed: "Die Bestätigung konnte nicht gesendet werden. Prüfen Sie die Slack-ID und versuchen Sie es erneut."
+        unlinked: "Ihr Slack-Konto ist nicht mehr verknüpft."
+slack:
+    confirm:
+        text: "Ist das Ihr Slack-Konto? Klicken Sie auf Bestätigen, um es zu verknüpfen."
+        button: "Bestätigen"
+        refused: "Diese Bestätigung gilt nicht für Ihr Slack-Konto."
+        linked: "Ihr Slack-Konto ist verknüpft."
+interaction:
+    link_required: "Verknüpfen und bestätigen Sie zuerst Ihr Slack-Konto (Kontoprofil)."
+    button_invalid: "Diese Schaltfläche ist nicht mehr gültig."
+    error: "Etwas ist schiefgelaufen. Versuchen Sie es später erneut."

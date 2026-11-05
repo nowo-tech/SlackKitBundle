@@ -1,0 +1,162 @@
+{
+    "name": "nowo-tech/slack-kit-bundle",
+    "description": "Slack for Symfony: a hardened Web API client, signed interactions and Events API ingress with replay protection, MAC-signed button values, an interactions router with verified actors, verified account linking, a Block Kit builder and an optional Notifier transport.",
+    "type": "symfony-bundle",
+    "keywords": [
+        "symfony",
+        "symfony-bundle",
+        "bundle",
+        "slack",
+        "slack-api",
+        "block-kit",
+        "chatops",
+        "webhooks",
+        "notifications",
+        "messaging",
+        "nowo",
+        "frankenphp"
+    ],
+    "homepage": "https://github.com/nowo-tech/SlackKitBundle",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Héctor Franco Aceituno",
+            "email": "hectorfranco@nowo.tech",
+            "homepage": "https://github.com/HecFranco",
+            "role": "Maintainer"
+        },
+        {
+            "name": "Nowo.tech",
+            "homepage": "https://nowo.tech"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/nowo-tech/SlackKitBundle/issues",
+        "source": "https://github.com/nowo-tech/SlackKitBundle",
+        "docs": "https://github.com/nowo-tech/SlackKitBundle/tree/main/docs",
+        "changelog": "https://github.com/nowo-tech/SlackKitBundle/blob/main/docs/CHANGELOG.md"
+    },
+    "require": {
+        "php": ">=8.2 <8.6",
+        "ext-json": "*",
+        "nowo-tech/form-kit-bundle": "^2.17",
+        "nowo-tech/ui-kit-bundle": "^2.27",
+        "psr/cache": "^2.0 || ^3.0",
+        "psr/clock": "^1.0",
+        "psr/log": "^2.0 || ^3.0",
+        "symfony/clock": "^7.4 || ^8.0",
+        "symfony/config": "^7.4 || ^8.0",
+        "symfony/dependency-injection": "^7.4 || ^8.0",
+        "symfony/event-dispatcher": "^7.4 || ^8.0",
+        "symfony/form": "^7.4 || ^8.0",
+        "symfony/framework-bundle": "^7.4 || ^8.0",
+        "symfony/http-client": "^7.4 || ^8.0",
+        "symfony/http-client-contracts": "^3.5",
+        "symfony/http-foundation": "^7.4 || ^8.0",
+        "symfony/http-kernel": "^7.4 || ^8.0",
+        "symfony/rate-limiter": "^7.4 || ^8.0",
+        "symfony/routing": "^7.4 || ^8.0",
+        "symfony/security-csrf": "^7.4 || ^8.0",
+        "symfony/service-contracts": "^3.5",
+        "symfony/translation-contracts": "^3.5",
+        "symfony/validator": "^7.4 || ^8.0",
+        "twig/twig": "^3.8"
+    },
+    "require-dev": {
+        "doctrine/dbal": "^3.8 || ^4.0",
+        "friendsofphp/php-cs-fixer": "^3.0",
+        "igor-php/igor-php": "^0.10.1",
+        "nowo-tech/instance-settings-bundle": "^1.3",
+        "nowo-tech/phpstan-frankenphp": "^1.0",
+        "phpstan/extension-installer": "^1.4",
+        "phpstan/phpstan": "^2.0",
+        "phpstan/phpstan-phpunit": "^2.0",
+        "phpstan/phpstan-symfony": "^2.0",
+        "phpunit/phpunit": "^11.5",
+        "rector/rector": "^2.0",
+        "symfony/browser-kit": "^7.4 || ^8.0",
+        "symfony/css-selector": "^7.4 || ^8.0",
+        "symfony/dom-crawler": "^7.4 || ^8.0",
+        "symfony/messenger": "^7.4 || ^8.0",
+        "symfony/notifier": "^7.4 || ^8.0",
+        "symfony/phpunit-bridge": "^7.4 || ^8.0",
+        "symfony/security-bundle": "^7.4 || ^8.0",
+        "symfony/translation": "^7.4 || ^8.0",
+        "symfony/yaml": "^7.4 || ^8.0"
+    },
+    "suggest": {
+        "nowo-tech/instance-settings-bundle": "Store the bot token and signing secret as encrypted instance settings and get the Slack settings section with Test connection (credentials.store: instance_settings)",
+        "symfony/flex": "For automatic recipe installation",
+        "symfony/messenger": "Handle Events API callbacks in a worker (ingress.async: true) and retry rate-limited handlers after Retry-After (messenger.retry_on_rate_limit)",
+        "symfony/notifier": "Send ChatMessage objects through the nowo-slack:// chat transport (notifier.enabled: true)",
+        "symfony/security-bundle": "Required by the account link routes and the settings section actions"
+    },
+    "autoload": {
+        "psr-4": {
+            "Nowo\\SlackKitBundle\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Nowo\\SlackKitBundle\\Tests\\": "tests/"
+        }
+    },
+    "archive": {
+        "exclude": [
+            "/demo",
+            "/.cursor"
+        ]
+    },
+    "extra": {
+        "symfony": {
+            "bundle": "Nowo\\SlackKitBundle\\NowoSlackKitBundle"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "phpstan/extension-installer": true
+        },
+        "platform": {
+            "php": "8.2.0"
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "scripts": {
+        "test": "@php -d memory_limit=512M vendor/bin/phpunit --color=always",
+        "test-coverage": "@php -d memory_limit=512M vendor/bin/phpunit --color=always --coverage-html coverage --coverage-clover coverage.xml --coverage-text",
+        "test-coverage-100": [
+            "@test-coverage",
+            "php .scripts/check-coverage.php coverage.xml --min-percent=99"
+        ],
+        "validate-phpdoc": "php .scripts/complete-public-phpdoc.php",
+        "cs-check": "php-cs-fixer fix --dry-run --diff",
+        "cs-fix": "php-cs-fixer fix",
+        "rector": "rector process",
+        "rector-dry": "rector process --dry-run --no-progress-bar",
+        "phpstan": "phpstan analyse --memory-limit=1G",
+        "update": "composer update --no-interaction",
+        "validate": "composer validate --strict",
+        "qa": [
+            "@cs-check",
+            "@test"
+        ],
+        "igor": "igor-php --no-agent ."
+    },
+    "scripts-descriptions": {
+        "test": "Run PHPUnit tests",
+        "test-coverage": "Run PHPUnit tests with code coverage",
+        "test-coverage-100": "Run test-coverage and fail if statement or element coverage is below 99% (REQ-TEST-003)",
+        "validate-phpdoc": "Fail when a class or public method in src/ has no PHPDoc (REQ-CS-001)",
+        "cs-check": "Check code style with PHP-CS-Fixer",
+        "cs-fix": "Fix code style with PHP-CS-Fixer",
+        "rector": "Apply Rector refactoring",
+        "rector-dry": "Run Rector in dry-run mode",
+        "phpstan": "Run PHPStan static analysis",
+        "update": "Update composer.lock (composer update)",
+        "validate": "Validate composer.json (composer validate --strict)",
+        "qa": "Run all quality assurance checks",
+        "igor": "Run Igor FrankenPHP worker-state audit (REQ-CS-008)"
+    }
+}

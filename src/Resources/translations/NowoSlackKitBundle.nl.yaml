@@ -1,0 +1,58 @@
+settings:
+    slack:
+        label: "Slack"
+        intro: "De Slack-app die directe berichten verstuurt en klikken op knoppen ontvangt. Plak deze Interactivity-URL in de Slack-app: %url%"
+        bot_token: "Bot-token"
+        bot_token_help: "xoxb-… met de scopes chat:write en im:write (users:read.email voor \"Vind mij via e-mail\"). Versleuteld opgeslagen."
+        signing_secret: "Ondertekeningsgeheim"
+        signing_secret_help: "Controleert dat verzoeken van Slack komen. Versleuteld opgeslagen."
+        team_id: "Werkruimte-ID"
+        team_id_help: "T…; verzoeken uit andere werkruimtes worden geweigerd. \"Verbinding testen\" vult het in."
+        allow_email_lookup: "\"Vind mij via e-mail\" toestaan"
+        allow_email_lookup_help: "Stuurt het e-mailadres van het lid naar Slack (users.lookupByEmail) om de Slack-ID te vinden. Vermeld dit in je privacyverklaring."
+        test_connection: "Verbinding testen"
+        notice_off: "Slack is niet geconfigureerd: sla een bot-token en een ondertekeningsgeheim op."
+        notice_no_team: "De werkruimte-ID ontbreekt: klikken worden geweigerd tot die is ingesteld (\"Verbinding testen\" vult hem in)."
+flash:
+    test_rate_limited: "Te veel verbindingstests. Probeer het later opnieuw."
+    test_failed: "Slack weigerde de verbindingstest: %error%."
+    test_ok: "Verbonden met %team% (%team_id%) als %bot%."
+link:
+    card:
+        title: "Slack"
+        intro: "Koppel je Slack-account om directe berichten te ontvangen en via Slack-knoppen te handelen. Slack vraagt je de koppeling te bevestigen."
+    status:
+        none: "Niet gekoppeld."
+        claimed: "Slack-ID %id% opgeslagen, nog niet bevestigd: stuur de bevestiging en klik in Slack op Bevestigen."
+        verified: "Gekoppeld en bevestigd: %id%."
+    form:
+        slack_user_id: "Slack-lid-ID"
+        slack_user_id_help: "In Slack: je profiel → ⋮ → Lid-ID kopiëren (U…)."
+        submit: "Opslaan"
+    action:
+        find: "Vind mij via e-mail"
+        confirm: "Bevestiging sturen"
+        unlink: "Ontkoppelen"
+        unlink_confirm: "Je Slack-account ontkoppelen?"
+    result:
+        claimed: "Slack-ID opgeslagen. Stuur de bevestiging om de koppeling af te ronden."
+        found: "Slack heeft je account gevonden. Stuur de bevestiging om de koppeling af te ronden."
+        not_found: "Slack heeft geen lid met je e-mailadres. Vul in plaats daarvan je lid-ID in."
+        in_use: "Deze Slack-ID is aan een ander account gekoppeld."
+        invalid: "Vul een Slack-lid-ID in (U… of W…)."
+        already_verified: "Je Slack-account is al gekoppeld en bevestigd."
+        unavailable: "Slack koppelen is nu niet beschikbaar."
+        rate_limited: "Te veel pogingen. Probeer het later opnieuw."
+        confirmation_sent: "Bevestiging verstuurd: klik op Bevestigen in het directe Slack-bericht."
+        confirmation_failed: "De bevestiging kon niet worden verstuurd. Controleer de Slack-ID en probeer het opnieuw."
+        unlinked: "Je Slack-account is ontkoppeld."
+slack:
+    confirm:
+        text: "Is dit je Slack-account? Klik op Bevestigen om het te koppelen."
+        button: "Bevestigen"
+        refused: "Deze bevestiging is niet geldig voor je Slack-account."
+        linked: "Je Slack-account is gekoppeld."
+interaction:
+    link_required: "Koppel en bevestig eerst je Slack-account (accountprofiel)."
+    button_invalid: "Deze knop is niet meer geldig."
+    error: "Er ging iets mis. Probeer het later opnieuw."

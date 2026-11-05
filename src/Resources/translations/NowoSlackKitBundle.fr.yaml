@@ -1,0 +1,58 @@
+settings:
+    slack:
+        label: "Slack"
+        intro: "L'application Slack qui envoie les messages directs et reçoit les clics sur les boutons. Collez cette URL d'interactivité dans l'application Slack : %url%"
+        bot_token: "Jeton du bot"
+        bot_token_help: "xoxb-… avec les portées chat:write et im:write (users:read.email pour « Me trouver par e-mail »). Stocké chiffré."
+        signing_secret: "Secret de signature"
+        signing_secret_help: "Vérifie que les requêtes viennent de Slack. Stocké chiffré."
+        team_id: "ID de l'espace de travail"
+        team_id_help: "T… ; les requêtes de tout autre espace de travail sont refusées. « Tester la connexion » le remplit."
+        allow_email_lookup: "Autoriser « Me trouver par e-mail »"
+        allow_email_lookup_help: "Envoie l'e-mail du membre à Slack (users.lookupByEmail) pour trouver son ID Slack. Mentionnez-le dans votre politique de confidentialité."
+        test_connection: "Tester la connexion"
+        notice_off: "Slack n'est pas configuré : enregistrez un jeton de bot et un secret de signature."
+        notice_no_team: "L'ID de l'espace de travail manque : les clics sont refusés tant qu'il n'est pas défini (« Tester la connexion » le remplit)."
+flash:
+    test_rate_limited: "Trop de tests de connexion. Réessayez plus tard."
+    test_failed: "Slack a refusé le test de connexion : %error%."
+    test_ok: "Connecté à %team% (%team_id%) en tant que %bot%."
+link:
+    card:
+        title: "Slack"
+        intro: "Liez votre compte Slack pour recevoir des messages directs et agir depuis les boutons Slack. Slack vous demande de confirmer le lien."
+    status:
+        none: "Non lié."
+        claimed: "ID Slack %id% enregistré, pas encore confirmé : envoyez la confirmation et cliquez sur Confirmer dans Slack."
+        verified: "Lié et confirmé : %id%."
+    form:
+        slack_user_id: "ID de membre Slack"
+        slack_user_id_help: "Dans Slack : votre profil → ⋮ → Copier l’ID de membre (U…)."
+        submit: "Enregistrer"
+    action:
+        find: "Me trouver par e-mail"
+        confirm: "Envoyer la confirmation"
+        unlink: "Délier"
+        unlink_confirm: "Délier votre compte Slack ?"
+    result:
+        claimed: "ID Slack enregistré. Envoyez la confirmation pour terminer la liaison."
+        found: "Slack a trouvé votre compte. Envoyez la confirmation pour terminer la liaison."
+        not_found: "Slack n'a aucun membre avec votre e-mail. Saisissez plutôt votre ID de membre."
+        in_use: "Cet ID Slack est lié à un autre compte."
+        invalid: "Saisissez un ID de membre Slack (U… ou W…)."
+        already_verified: "Votre compte Slack est déjà lié et confirmé."
+        unavailable: "La liaison Slack n'est pas disponible pour le moment."
+        rate_limited: "Trop de tentatives. Réessayez plus tard."
+        confirmation_sent: "Confirmation envoyée : cliquez sur Confirmer dans le message direct Slack."
+        confirmation_failed: "La confirmation n'a pas pu être envoyée. Vérifiez l'ID Slack et réessayez."
+        unlinked: "Votre compte Slack est délié."
+slack:
+    confirm:
+        text: "Est-ce votre compte Slack ? Cliquez sur Confirmer pour le lier."
+        button: "Confirmer"
+        refused: "Cette confirmation n'est pas valable pour votre compte Slack."
+        linked: "Votre compte Slack est lié."
+interaction:
+    link_required: "Liez et confirmez d'abord votre compte Slack (profil du compte)."
+    button_invalid: "Ce bouton n'est plus valide."
+    error: "Une erreur s'est produite. Réessayez plus tard."

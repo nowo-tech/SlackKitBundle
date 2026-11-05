@@ -1,0 +1,58 @@
+settings:
+    slack:
+        label: "Slack"
+        intro: "L'app Slack che invia messaggi diretti e riceve i clic sui pulsanti. Incolla questo URL di Interattività nell'app Slack: %url%"
+        bot_token: "Token del bot"
+        bot_token_help: "xoxb-… con gli scope chat:write e im:write (users:read.email per «Trovami per e-mail»). Salvato cifrato."
+        signing_secret: "Segreto di firma"
+        signing_secret_help: "Verifica che le richieste provengano da Slack. Salvato cifrato."
+        team_id: "ID dell'area di lavoro"
+        team_id_help: "T…; le richieste da altre aree di lavoro vengono rifiutate. «Prova connessione» lo compila."
+        allow_email_lookup: "Consenti «Trovami per e-mail»"
+        allow_email_lookup_help: "Invia l'e-mail del membro a Slack (users.lookupByEmail) per trovarne l'ID Slack. Indicalo nell'informativa privacy."
+        test_connection: "Prova connessione"
+        notice_off: "Slack non è configurato: salva un token del bot e un segreto di firma."
+        notice_no_team: "Manca l'ID dell'area di lavoro: i clic vengono rifiutati finché non è impostato («Prova connessione» lo compila)."
+flash:
+    test_rate_limited: "Troppi test di connessione. Riprova più tardi."
+    test_failed: "Slack ha rifiutato il test di connessione: %error%."
+    test_ok: "Connesso a %team% (%team_id%) come %bot%."
+link:
+    card:
+        title: "Slack"
+        intro: "Collega il tuo account Slack per ricevere messaggi diretti e agire dai pulsanti di Slack. Slack ti chiederà di confermare il collegamento."
+    status:
+        none: "Non collegato."
+        claimed: "ID Slack %id% salvato, non ancora confermato: invia la conferma e fai clic su Conferma in Slack."
+        verified: "Collegato e confermato: %id%."
+    form:
+        slack_user_id: "ID membro Slack"
+        slack_user_id_help: "In Slack: il tuo profilo → ⋮ → Copia ID membro (U…)."
+        submit: "Salva"
+    action:
+        find: "Trovami per e-mail"
+        confirm: "Invia conferma"
+        unlink: "Scollega"
+        unlink_confirm: "Scollegare il tuo account Slack?"
+    result:
+        claimed: "ID Slack salvato. Invia la conferma per completare il collegamento."
+        found: "Slack ha trovato il tuo account. Invia la conferma per completare il collegamento."
+        not_found: "Slack non ha membri con la tua e-mail. Inserisci il tuo ID membro."
+        in_use: "Questo ID Slack è collegato a un altro account."
+        invalid: "Inserisci un ID membro Slack (U… o W…)."
+        already_verified: "Il tuo account Slack è già collegato e confermato."
+        unavailable: "Il collegamento con Slack non è disponibile ora."
+        rate_limited: "Troppi tentativi. Riprova più tardi."
+        confirmation_sent: "Conferma inviata: fai clic su Conferma nel messaggio diretto di Slack."
+        confirmation_failed: "Impossibile inviare la conferma. Controlla l'ID Slack e riprova."
+        unlinked: "Il tuo account Slack è scollegato."
+slack:
+    confirm:
+        text: "È questo il tuo account Slack? Fai clic su Conferma per collegarlo."
+        button: "Conferma"
+        refused: "Questa conferma non è valida per il tuo account Slack."
+        linked: "Il tuo account Slack è collegato."
+interaction:
+    link_required: "Prima collega e conferma il tuo account Slack (profilo dell'account)."
+    button_invalid: "Questo pulsante non è più valido."
+    error: "Qualcosa è andato storto. Riprova più tardi."

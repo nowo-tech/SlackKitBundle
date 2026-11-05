@@ -1,0 +1,14 @@
+# Demo only: the admin UI is open without login (allow_unauthenticated is refused unless kernel.debug is true).
+# Production: keep allow_unauthenticated false, protect web_ui.path_prefix with security.access_control and set
+# security.access_roles (see docs/CONFIGURATION.md).
+nowo_instance_settings:
+    doctrine:
+        table_prefix: 'demo_'
+    web_ui:
+        path_prefix: /admin/settings
+    security:
+        access_roles: [ROLE_ADMIN]
+        allow_unauthenticated: true
+    portability:
+        sealed_secrets: true
+        max_upload_bytes: 1048576

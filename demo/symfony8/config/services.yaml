@@ -1,0 +1,17 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+
+  App\:
+    resource: '../src/'
+    exclude:
+      - '../src/DependencyInjection/'
+      - '../src/Entity/'
+      - '../src/Kernel.php'
+
+  App\FakeSlack\FakeSlackApi:
+    arguments: ['%kernel.project_dir%/var/demo/fake-slack.json']
+
+  App\Slack\DemoIdentityStore:
+    arguments: ['%kernel.project_dir%/var/demo/identities.json']

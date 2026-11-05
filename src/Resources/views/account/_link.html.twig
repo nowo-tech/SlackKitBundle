@@ -1,0 +1,37 @@
+{#
+  Account link card (contract §10): include it in the account profile page.
+
+      {{ include('@NowoSlackKitBundle/account/_link.html.twig') }}
+
+  Renders nothing when linking is disabled or nobody is signed in. UiKit card partial (REQ-UI-003): status, the
+  member-id form (FormKit / Symfony form, CSRF) while the link is not verified, and POST actions with CSRF-only forms
+  (Find me by e-mail, Send confirmation, Unlink with a confirm dialog). Override with
+  templates/bundles/NowoSlackKitBundle/account/_link.html.twig (REQ-TWIG-001).
+#}
+{% set _card = nowo_slack_kit_link_card() %}
+{% if _card is not null %}
+    {% set _domain = 'NowoSlackKitBundle' %}
+    {% set _body %}
+        <p class="{{ nowo_ui_class('muted', 'NowoSlackKitBundle') }}" data-testid="slack-kit-link-status" data-status="{{ _card.status }}">
+            {{ ('link.status.' ~ _card.status)|trans({'%id%': _card.slack_user_id ?? ''}, _domain) }}
+        </p>
+        {% if _card.claim_form is not null %}
+            {{ form_start(_card.claim_form, {attr: {'data-testid': 'slack-kit-link-claim'}}) }}
+            {% for child in _card.claim_form %}
+                {{ form_row(child) }}
+            {% endfor %}
+            <div class="{{ nowo_ui_class('form_actions', 'NowoSlackKitBundle') }}">
+                <button type="submit" class="{{ nowo_ui_class('btn_primary', 'NowoSlackKitBundle') }}">{{ 'link.form.submit'|trans({}, _domain) }}</button>
+            </div>
+            {{ form_end(_card.claim_form) }}
+        {% endif %}
+    {% endset %}
+    {{ include('@NowoUiKitBundle/partials/_card.html.twig', {
+        id: 'slack-link',
+        title: {key: 'link.card.title', domain: _domain},
+        intro: {key: 'link.card.intro', domain: _domain},
+        body: _body,
+        actions: _card.actions,
+        bundle: 'NowoSlackKitBundle',
+    }) }}
+{% endif %}

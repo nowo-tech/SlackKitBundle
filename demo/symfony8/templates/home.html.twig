@@ -1,0 +1,79 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Home - Slack Kit Demo{% endblock %}
+
+{% block stylesheets %}
+    <link rel="stylesheet" href="{{ asset('css/nowo-ui.css', 'nowo_ui_kit') }}">
+    {{ nowo_ui_tokens() }}
+{% endblock %}
+
+{% block body %}
+<div class="card shadow-sm mb-4">
+    <div class="card-header"><h2 class="mb-0">Slack Kit demo</h2></div>
+    <div class="card-body">
+        <p>
+            Everything here runs against an <strong>in-app fake Slack</strong>: the bundle's Web API client talks to
+            <code>App\FakeSlack\FakeSlackApi</code> (the HttpClient mock), and clicks are signed with a fake signing secret
+            and sent to the bundle's real ingress (<code>POST /slack/interactions</code>). No token, workspace or member is real.
+        </p>
+        <ol class="mb-0">
+            <li><code>make seed</code> stores the fake bot token, signing secret and workspace <code>T00000000</code> in the <a href="{{ path('nowo_instance_settings_section', {section: 'slack'}) }}">Slack settings</a>.</li>
+            <li>Link the demo account below (type <code>U00000001</code> or use <em>Find me by e-mail</em>), then <em>Send confirmation</em>.</li>
+            <li>Click the signed <em>Confirm</em> button in the fake Slack log: the link becomes verified.</li>
+            <li>Post a demo button and click it: the <code>demo.ping</code> handler answers only for a verified actor.</li>
+        </ol>
+    </div>
+</div>
+
+<div class="mb-4" data-testid="demo-link-card">
+    {{ include('@NowoSlackKitBundle/account/_link.html.twig') }}
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header"><h3 class="mb-0">Fake Slack: buttons</h3></div>
+    <div class="card-body">
+        <div class="d-flex gap-2 mb-3">
+            {{ form_start(post_form, {attr: {'data-testid': 'demo-post-button'}}) }}{% for child in post_form %}{{ form_row(child) }}{% endfor %}{{ form_end(post_form) }}
+            {{ form_start(clear) }}{% for child in clear %}{{ form_row(child) }}{% endfor %}{{ form_end(clear) }}
+        </div>
+        {% if buttons is empty %}
+            <p class="text-muted mb-0" data-testid="demo-no-buttons">No message with buttons yet.</p>
+        {% else %}
+            <table class="table table-sm align-middle mb-0" data-testid="demo-buttons">
+                <thead><tr><th>Channel</th><th>Button</th><th>action_id</th><th>Value (nsk1)</th><th></th></tr></thead>
+                <tbody>
+                {% for button in buttons %}
+                    <tr data-action="{{ button.action_id }}">
+                        <td><code>{{ button.channel }}</code></td>
+                        <td>{{ button.text }}</td>
+                        <td><code>{{ button.action_id }}</code></td>
+                        <td><code class="text-break small">{{ button.value|u.truncate(48, '…') }}</code></td>
+                        <td>{{ form_start(button.form) }}{% for child in button.form %}{{ form_row(child) }}{% endfor %}{{ form_end(button.form) }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header"><h3 class="mb-0">Fake Slack: Web API calls</h3></div>
+    <div class="card-body">
+        {% if calls is empty %}
+            <p class="text-muted mb-0">No call yet.</p>
+        {% else %}
+            <ul class="list-unstyled mb-0" data-testid="demo-calls">
+                {% for call in calls %}
+                    <li><code>{{ call.method }}</code> {{ call.body.channel ?? call.body.users ?? call.body.email ?? '' }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block javascripts %}
+    {# UiKit scripts: the Unlink confirm dialog of the account link card. #}
+    {{ include(nowo_ui_partial('scripts', null)) }}
+{% endblock %}

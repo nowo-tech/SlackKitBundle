@@ -1,0 +1,11 @@
+controllers:
+    resource: ../src/Controller/
+    type: attribute
+
+nowo_instance_settings:
+    resource: .
+    type: nowo_instance_settings
+
+nowo_slack_kit:
+    resource: .
+    type: nowo_slack_kit
