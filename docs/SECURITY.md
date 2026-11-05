@@ -149,7 +149,9 @@ bot token.
   `postgres(ql)+advisory://` advisory locks, `zookeeper://` ephemeral nodes) and unknown stores fail the build; a
   store DSN from an environment variable is checked at runtime by the same allowlist (ingress requests fail with
   500). A custom `replay_lock_factory` whose store the bundle cannot see at all is trusted as configured. Handlers
-  must be idempotent anyway.
+  must be idempotent anyway. Debug and test builds skip the allowlist; there a `flock` or `semaphore` store remembers
+  nothing (each claim is released when it returns), so replays are **not** refused; tests that exercise replay
+  protection need `in-memory` ([CONFIGURATION.md](CONFIGURATION.md#replay-lock-store-in-tests)).
 - **Two replay memories during an adoption.** A host that already remembered signatures in its own store does not
   share that memory with the bundle, so a request captured in the minutes before the deploy could be replayed once
   after it. Accepted because handlers are idempotent.

@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+  - [Documentation](#documentation)
 - [[1.0.0] - 2026-11-05](#100---2026-11-05)
   - [Added](#added)
   - [Security (REQ-SEC-004 audit, appendix FS)](#security-req-sec-004-audit-appendix-fs)
@@ -13,6 +14,19 @@ All notable changes to this project are documented here. The format follows
   - [Notes / deviations from contract v1.1](#notes--deviations-from-contract-v11)
 
 ## [Unreleased]
+
+### Documentation
+
+- Lock DSN fallback: `%env(default:REDIS_URL:SLACK_KIT_LOCK_DSN)%` does not work, because Symfony's `default:` env
+  var processor takes a container **parameter** name as its fallback. CONFIGURATION ("Lock DSN with a fallback"),
+  INSTALLATION and UPGRADING now show the working patterns: a parameter set to `%env(REDIS_URL)%` used as
+  `%env(default:slack_kit_lock_dsn_fallback:SLACK_KIT_LOCK_DSN)%`, or `SLACK_KIT_LOCK_DSN=${REDIS_URL}` in `.env`
+  (feedback from symfony-beacon adopting 1.0.0).
+- Replay lock store in tests: the allowlist is skipped in debug and test, but a `flock` (or `semaphore`) store
+  releases each claim as soon as it returns, so replays go through. Hosts are told to override the SlackKit lock
+  resource with `in-memory` in the test environment and to call `KernelBrowser::disableReboot()` in tests that send
+  the same request twice (a reboot builds a new, empty store). SECURITY residual risks and the demo comment say so;
+  FrameworkBundle's default store is documented as `semaphore` (or `flock` without `ext-sysvsem`).
 
 ## [1.0.0] - 2026-11-05
 

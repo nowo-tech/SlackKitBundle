@@ -6,8 +6,11 @@ framework:
   csrf_protection: true
   php_errors:
     log: true
-  # Replay memory of the Slack ingress (symfony/lock). flock is accepted only because the demo runs with kernel.debug;
-  # production uses a shared store, e.g. lock: '%env(LOCK_DSN)%' with redis://… or a DBAL DSN.
+  # Replay memory of the Slack ingress (symfony/lock). flock is accepted only because the demo runs with kernel.debug,
+  # and it does not refuse replays (each claim is released as soon as it returns; see docs/CONFIGURATION.md,
+  # "Replay lock store in tests"). Production uses a shared store, e.g. a dedicated resource
+  # slack_kit: ['%env(SLACK_KIT_LOCK_DSN)%'] with redis://… or a DBAL DSN. To fall back to another variable use a
+  # parameter: %env(default:slack_kit_lock_dsn_fallback:SLACK_KIT_LOCK_DSN)% (default: takes a parameter name).
   lock: flock
   # Demo: no request ever leaves the container; the fake Slack answers the bundle's Web API calls.
   http_client:
