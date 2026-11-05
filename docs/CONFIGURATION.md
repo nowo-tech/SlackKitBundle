@@ -10,6 +10,8 @@ security switches must be literal booleans (REQ-SF-006).
 - [apps and default_app](#apps-and-default_app)
 - [credentials](#credentials)
 - [ingress](#ingress)
+  - [Lock DSN with a fallback](#lock-dsn-with-a-fallback)
+  - [Replay lock store in tests](#replay-lock-store-in-tests)
 - [interactions](#interactions)
   - [value_ttl](#value_ttl)
   - [previous_secrets (kernel.secret rotation)](#previous_secrets-kernelsecret-rotation)
@@ -140,7 +142,7 @@ Routes (loaded by the `nowo_slack_kit` route loader):
   the same way for one hour and released when handling fails, so Slack's retry of a failed event goes through (the
   failed delivery answers 500 `Event handling failed`).
 - `replay_lock_factory` is the `LockFactory` service id (default `lock.factory`, FrameworkBundle's default lock
-  resource). Prefer a dedicated resource shared by every worker and server, so the app's own locks are untouched:
+  resource, whose own default store is `semaphore` when `ext-sysvsem` is loaded and `flock` otherwise). Prefer a dedicated resource shared by every worker and server, so the app's own locks are untouched:
 
   ```yaml
   framework:
@@ -183,6 +185,68 @@ Routes (loaded by the `nowo_slack_kit` route loader):
 
 The ingress routes must not require authentication; add a firewall with `security: false` for their paths
 ([INSTALLATION.md](INSTALLATION.md#firewall)).
+
+### Lock DSN with a fallback
+
+To reuse an existing variable (for example `REDIS_URL`) when `SLACK_KIT_LOCK_DSN` is not set, do **not** write
+`%env(default:REDIS_URL:SLACK_KIT_LOCK_DSN)%`. The first argument of Symfony's `default:` env var processor is the
+name of a **container parameter**, not of an environment variable
+([EnvVarProcessor](https://symfony.com/doc/current/configuration/env_var_processors.html): `env(default:fallback_param:BAR)`
+returns the parameter `fallback_param` when `BAR` is missing or empty). With no parameter called `REDIS_URL`, Symfony
+throws `Invalid env fallback in "default:REDIS_URL:SLACK_KIT_LOCK_DSN": parameter "REDIS_URL" not found.` when the
+lock store is built, so every ingress request fails. Working patterns:
+
+```yaml
+# 1. A fallback parameter that reads the other variable
+parameters:
+    slack_kit_lock_dsn_fallback: '%env(REDIS_URL)%'
+
+framework:
+    lock:
+        resources:
+            default: ['%env(LOCK_DSN)%']
+            slack_kit: ['%env(default:slack_kit_lock_dsn_fallback:SLACK_KIT_LOCK_DSN)%']
+```
+
+```dotenv
+# 2. Or no processor at all: Dotenv expands variables (the resource stays '%env(SLACK_KIT_LOCK_DSN)%')
+SLACK_KIT_LOCK_DSN=${REDIS_URL}
+```
+
+Or point the resource straight at the shared variable (`slack_kit: ['%env(REDIS_URL)%']`). Whatever the pattern,
+the DSN comes from the environment, so the allowlist checks the resulting store at runtime (a refused store makes
+every ingress request fail with 500).
+
+### Replay lock store in tests
+
+In the `test` environment (and whenever `kernel.debug` is true) the allowlist is **not** enforced, so a test suite
+needs no Redis. That does not make every local store usable for replay tests:
+
+- **`flock`** (and `semaphore`) remember nothing across claims. `FlockStore` keeps the lock in a file handle held
+  by the lock's key; `ReplayGuard::claimSignature()` keeps no reference to the lock, so the handle is closed and the
+  OS releases the lock as soon as the claim returns (an Events API claim lives until the request ends). A replayed
+  request is accepted again, so a test that expects the second copy to be refused fails. `semaphore` behaves the
+  same: the System V semaphore lives in the lock's key and is released when that key is freed (at the latest when
+  the request ends).
+- **`in-memory`** keeps every claim in the store object until its TTL, independent of the lock object, so the second
+  copy of a signature or `event_id` is refused for as long as the container lives. Use it for the SlackKit resource
+  in the test environment:
+
+  ```yaml
+  # config/packages/test/framework.yaml (or when@test:)
+  framework:
+      lock:
+          resources:
+              slack_kit: ['in-memory']   # replaces the production DSN; resources are not deep-merged
+  ```
+
+- `KernelBrowser` reboots the kernel between requests by default, which builds a new container and so a new, empty
+  `InMemoryStore`. In a test that sends the same signed request twice, call `$client->disableReboot()` before the
+  first request (or point the resource at a real shared store, such as a Redis service or a file-backed SQLite DBAL
+  connection, when the claims must survive reboots).
+
+Never ship `in-memory` outside tests: each PHP worker or FPM process has its own memory (it is refused outside debug
+and test anyway).
 
 ## interactions
 
@@ -327,7 +391,11 @@ SLACK_SIGNING_SECRET=testsigningsecretnotreal00000000   # 16-128 letters or digi
 SLACK_LEGACY_UNTIL=                                     # empty = legacy off; else e.g. 2026-12-05T00:00:00Z
 PREVIOUS_APP_SECRET=
 SLACK_KIT_LOCK_DSN=redis://redis:6379                   # framework.lock.resources.slack_kit: replay memory
+# SLACK_KIT_LOCK_DSN=${REDIS_URL}                       # reuse another variable (not %env(default:REDIS_URL:…)%)
 ```
+
+For a fallback to another variable see [Lock DSN with a fallback](#lock-dsn-with-a-fallback); for the test
+environment see [Replay lock store in tests](#replay-lock-store-in-tests).
 
 With the default `instance_settings` store the bot token (`xoxb-PLACEHOLDER` in examples) and the signing secret are
 entered in the admin section and stored encrypted; no environment variable is needed.

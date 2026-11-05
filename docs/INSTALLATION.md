@@ -35,9 +35,15 @@
   ```
 
   Only an allowlist of expiring shared stores builds when `kernel.debug` is false outside the `test` environment
-  (Redis, Memcached, PDO, Doctrine DBAL, MongoDB, DynamoDB). Local stores (`flock`, the FrameworkBundle default, `semaphore`, `in-memory`, `null`),
-  session-scoped ones (`pgsql+advisory:`, `postgresql+advisory://`, `zookeeper://`) and unknown stores fail the build
-  ([CONFIGURATION.md](CONFIGURATION.md#ingress)).
+  (Redis, Memcached, PDO, Doctrine DBAL, MongoDB, DynamoDB). Local stores (`flock` and `semaphore`, the FrameworkBundle
+  defaults, `in-memory`, `null`), session-scoped ones (`pgsql+advisory:`, `postgresql+advisory://`, `zookeeper://`) and
+  unknown stores fail the build ([CONFIGURATION.md](CONFIGURATION.md#ingress)).
+  To fall back to another variable such as `REDIS_URL`, do not write `%env(default:REDIS_URL:SLACK_KIT_LOCK_DSN)%`:
+  `default:` takes a container **parameter** name. Define a parameter (`slack_kit_lock_dsn_fallback: '%env(REDIS_URL)%'`)
+  and use `%env(default:slack_kit_lock_dsn_fallback:SLACK_KIT_LOCK_DSN)%`, or set `SLACK_KIT_LOCK_DSN=${REDIS_URL}` in
+  `.env` ([Lock DSN with a fallback](CONFIGURATION.md#lock-dsn-with-a-fallback)).
+  In the `test` environment use `slack_kit: ['in-memory']`, not `flock`: a `flock` claim is released as soon as it
+  returns, so replays go through ([Replay lock store in tests](CONFIGURATION.md#replay-lock-store-in-tests)).
 
 ## Install the package
 

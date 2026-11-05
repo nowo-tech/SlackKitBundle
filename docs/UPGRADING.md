@@ -40,7 +40,7 @@ touching its Slack app or its database. The full walkthrough is in
 `symfony/lock` is a hard dependency: `ReplayGuard` claims every verified signature (and every Events API `event_id`)
 atomically through `ingress.replay_lock_factory` (default `lock.factory`). In production (`kernel.debug: false`,
 environment other than `test`) the container build **fails** unless that factory's store is on the allowlist of
-expiring shared stores: Redis, Memcached, PDO, Doctrine DBAL, MongoDB, DynamoDB. FrameworkBundle's default `flock` only protects one host; session-scoped
+expiring shared stores: Redis, Memcached, PDO, Doctrine DBAL, MongoDB, DynamoDB. FrameworkBundle's defaults (`semaphore`, or `flock` without `ext-sysvsem`) only protect one host; session-scoped
 stores (`pgsql+advisory:`, `pgsql+advisory://`, `postgres(ql)+advisory://`, `zookeeper://`) ignore the lock TTL;
 both are refused, as is any unknown DSN or store class. Plain `pgsql:` / `postgresql://` DSNs are fine (expiring
 PDO / DBAL stores).
@@ -61,6 +61,16 @@ nowo_slack_kit:
 FrameworkBundle's `default` resource is checked only while SlackKit points at it (the default `lock.factory`). A DSN
 from an environment variable is checked at runtime by the same allowlist: a refused store then makes every ingress
 request fail with 500. There is no `ingress.replay_cache_pool` option.
+
+- **Falling back to another variable** (for example an existing `REDIS_URL`): `%env(default:REDIS_URL:SLACK_KIT_LOCK_DSN)%`
+  does **not** work, because the `default:` processor takes a container parameter name as its fallback ("parameter
+  "REDIS_URL" not found"). Define `parameters: { slack_kit_lock_dsn_fallback: '%env(REDIS_URL)%' }` and use
+  `%env(default:slack_kit_lock_dsn_fallback:SLACK_KIT_LOCK_DSN)%`, or write `SLACK_KIT_LOCK_DSN=${REDIS_URL}` in
+  `.env` ([CONFIGURATION.md](CONFIGURATION.md#lock-dsn-with-a-fallback)).
+- **Test environment**: the allowlist is not enforced there, but `flock` (and `semaphore`) release each claim as soon
+  as it returns, so a replay goes through. Override the resource with `slack_kit: ['in-memory']` in the test config
+  and call `$client->disableReboot()` in tests that send the same request twice
+  ([CONFIGURATION.md](CONFIGURATION.md#replay-lock-store-in-tests)).
 
 ### Values already posted to Slack
 
