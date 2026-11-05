@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.0.0] - 2026-11-05](#100---2026-11-05)
   - [Added](#added)
   - [Security (REQ-SEC-004 audit, appendix FS)](#security-req-sec-004-audit-appendix-fs)
   - [Interim decisions (aligned with symfony-beacon 1.122.1)](#interim-decisions-aligned-with-symfony-beacon-11221)
@@ -13,8 +14,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-Initial import of **SlackKitBundle 1.0.0** (not tagged yet: the independent REQ-SEC-004 audit comes before the
-`v1.0.0` tag). Slack for Symfony: a hardened Web API client, a signed interactions and Events API ingress with replay
+## [1.0.0] - 2026-11-05
+
+First release of **SlackKitBundle** (independent REQ-SEC-004 audit: appendix FS and its delta, Pass). Slack for Symfony: a hardened Web API client, a signed interactions and Events API ingress with replay
 protection, MAC-signed button values (`nsk1`), an interactions router with verified actors, verified account linking,
 a Block Kit builder and an optional Notifier chat transport. Built from contract v1.1 (2026-11-05).
 
@@ -234,3 +236,6 @@ Decided by the owner on 2026-11-05 so that Beacon's adoption is a no-op:
 - Not shipped yet: the HttpLogBundle masked-header registration (§12; the headers to mask are documented in [SECURITY.md](SECURITY.md)), `SlackInstallationSavedEvent`
   (OAuth, 1.1). VarDumper and the profiler show `[redacted]` through `SlackSecret::__debugInfo()`; there is no
   separate caster.
+
+[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.0.0

@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | Package | `nowo-tech/slack-kit-bundle` (`symfony-bundle`) |
-| Audited revision | `1.0.0` (unreleased, branch `main`) |
+| Audited revision | `1.0.0` |
 | Audit date | 2026-11-05 |
 | Method | Manual review of every file under `src/`; PHPStan with `nowo-tech/phpstan-frankenphp` (`ruleset-classic`, `ruleset-worker-strict`, `ruleset-hardening`); Igor (`composer igor`); unit tests of `ReplyDispatcher::reset()` and `InMemoryInstallationStore::reset()`; kernel tests with consecutive requests on one container; demo run in worker mode |
 | **Verdict** | ✅ **Viable** — services are stateless (`final readonly`) except the reply buffer (filled and flushed within one request, reset by `kernel.reset`), the in-memory test store and the route loader's load-once flag; credentials are read from the store on every call and never memoised |
