@@ -25,6 +25,10 @@ nowo_slack_kit:
         rate_limiter_cache_pool: cache.rate_limiter
 ```
 
+The pool must persist: the build now fails when the linking limiters' pool (the option, or `cache.app` by default) is a
+`NullAdapter`, or an `ArrayAdapter` outside `kernel.debug` / the `test` environment. A production `cache.app` on the
+array or null adapter must move the limiters to a persistent pool with this option.
+
 Put it under `when@test` to keep production on `cache.app`, or use it in every env to keep limiter counters in the
 rate-limiter pool.
 

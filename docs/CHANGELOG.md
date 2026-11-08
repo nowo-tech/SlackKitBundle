@@ -22,6 +22,9 @@ All notable changes to this project are documented here. The format follows
 - `linking.rate_limiter_cache_pool` (default `cache.app`): cache pool service id behind the four linking rate
   limiters, so a host can use `cache.rate_limiter` or a persistent pool in tests instead of redefining
   `nowo_slack_kit.linking.*.storage` services. The default keeps today's storage.
+- `LinkingLimiterPoolPass` (audit IL-L2): the linking limiters' pool may not be a `NullAdapter` (any environment) or an
+  `ArrayAdapter` (outside debug and test), since either one silently switches the claim, e-mail lookup and
+  confirmation limits off. Applies to the default `cache.app` too.
 
 ## [1.0.1] - 2026-11-05
 

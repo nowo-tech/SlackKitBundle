@@ -319,7 +319,10 @@ Requires two host services (ids, not classes) — see [USAGE.md](USAGE.md#accoun
 
 The four limiters are fixed-window Symfony rate limiters stored in the `rate_limiter_cache_pool` cache pool (default
 `cache.app`; `@` prefix accepted). Point it at `cache.rate_limiter` (FrameworkBundle's pool), a Redis pool, or, in
-tests, a pool that survives between requests when `cache.app` is an `ArrayAdapter`. `limiter` keys `acc:<account>` and
+tests, a pool that survives between requests when `cache.app` is an `ArrayAdapter`. The pool must keep the counters:
+a `NullAdapter` pool fails the container compile in every environment, and an `ArrayAdapter` pool (one request, or
+one worker) fails it unless `kernel.debug` is true or the environment is `test` (`LinkingLimiterPoolPass`, audit
+IL-L2). The *Test connection* limiter keeps `cache.app` whatever this option says. `limiter` keys `acc:<account>` and
 `slack:<team>:<user>` for the per-target confirmation limit). A refusal sends nothing, returns `RATE_LIMITED` and
 dispatches `SlackConfirmationRateLimitedEvent`.
 
