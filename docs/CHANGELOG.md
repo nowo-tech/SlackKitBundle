@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.1.0] - 2026-11-08](#110---2026-11-08)
   - [Added](#added)
 - [[1.0.1] - 2026-11-05](#101---2026-11-05)
   - [Documentation](#documentation)
@@ -17,6 +18,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-08
+
+`linking.rate_limiter_cache_pool` chooses the cache pool of the linking limiters, and a pool that would switch the limits off (`NullAdapter`, or `ArrayAdapter` outside debug/test) fails the build (Beacon C9). Audit: Appendix IL and Delta IL, Pass.
+
 ### Added
 
 - `linking.rate_limiter_cache_pool` (default `cache.app`): cache pool service id behind the four linking rate
@@ -25,6 +30,8 @@ All notable changes to this project are documented here. The format follows
 - `LinkingLimiterPoolPass` (audit IL-L2): the linking limiters' pool may not be a `NullAdapter` (any environment) or an
   `ArrayAdapter` (outside debug and test), since either one silently switches the claim, e-mail lookup and
   confirmation limits off. Applies to the default `cache.app` too.
+
+[1.1.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.1.0
 
 ## [1.0.1] - 2026-11-05
 
@@ -268,5 +275,5 @@ Decided by the owner on 2026-11-05 so that Beacon's adoption is a no-op:
   (OAuth, 1.1). VarDumper and the profiler show `[redacted]` through `SlackSecret::__debugInfo()`; there is no
   separate caster.
 
-[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.1.0...HEAD
 [1.0.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.0.0

@@ -6,6 +6,7 @@ are listed per target version.
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [To 1.1.0](#to-110)
 - [Installing 1.0.0](#installing-100)
   - [From scratch](#from-scratch)
   - [Adopting it from an in-app Slack integration](#adopting-it-from-an-in-app-slack-integration)
@@ -13,6 +14,14 @@ are listed per target version.
   - [Values already posted to Slack](#values-already-posted-to-slack)
 
 ## Unreleased
+
+## To 1.1.0
+
+From **1.0.1**:
+
+```bash
+composer update nowo-tech/slack-kit-bundle
+```
 
 No action required: `linking.rate_limiter_cache_pool` defaults to `cache.app`, the pool used before.
 
@@ -22,8 +31,16 @@ Hosts that redefined `nowo_slack_kit.linking.confirmation_per_*.storage` (for ex
 ```yaml
 nowo_slack_kit:
     linking:
-        rate_limiter_cache_pool: cache.rate_limiter
+        rate_limiter_cache_pool: app.slack_linking_limiter   # a pool on a persistent adapter
+
+framework:
+    cache:
+        pools:
+            app.slack_linking_limiter:
+                adapter: cache.adapter.filesystem   # or Redis / PDO
 ```
+
+`cache.rate_limiter` inherits `cache.app`'s adapter, so it does not help when `cache.app` is an `ArrayAdapter`.
 
 The pool must persist: the build now fails when the linking limiters' pool (the option, or `cache.app` by default) is a
 `NullAdapter`, or an `ArrayAdapter` outside `kernel.debug` / the `test` environment. A production `cache.app` on the

@@ -318,8 +318,9 @@ Requires two host services (ids, not classes) — see [USAGE.md](USAGE.md#accoun
 - `account_resolver`: `SlackAccountResolverInterface` (current user → account id).
 
 The four limiters are fixed-window Symfony rate limiters stored in the `rate_limiter_cache_pool` cache pool (default
-`cache.app`; `@` prefix accepted). Point it at `cache.rate_limiter` (FrameworkBundle's pool), a Redis pool, or, in
-tests, a pool that survives between requests when `cache.app` is an `ArrayAdapter`. The pool must keep the counters:
+`cache.app`; `@` prefix accepted). Point it at a dedicated pool on a persistent adapter (Redis, filesystem, PDO), or,
+in tests, a pool that survives between requests when `cache.app` is an `ArrayAdapter`. Note that FrameworkBundle's
+`cache.rate_limiter` inherits `cache.app`'s adapter, so it is no way out of an `ArrayAdapter` `cache.app` (audit IL-I11). The pool must keep the counters:
 a `NullAdapter` pool fails the container compile in every environment, and an `ArrayAdapter` pool (one request, or
 one worker) fails it unless `kernel.debug` is true or the environment is `test` (`LinkingLimiterPoolPass`, audit
 IL-L2). The *Test connection* limiter keeps `cache.app` whatever this option says. `limiter` keys `acc:<account>` and
