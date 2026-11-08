@@ -58,6 +58,7 @@ final class ExtensionTest extends TestCase
         self::assertSame('P30D', $config['interactions']['value_ttl']);
         self::assertFalse($config['linking']['enabled']);
         self::assertSame(['limit' => 3, 'interval' => '1 hour'], $config['linking']['confirmation_per_target']);
+        self::assertSame('cache.app', $config['linking']['rate_limiter_cache_pool']);
         self::assertTrue(Configuration::isDuration('PT24H'));
         self::assertFalse(Configuration::isDuration('P'));
         self::assertFalse(Configuration::isDuration(5));
@@ -73,6 +74,8 @@ final class ExtensionTest extends TestCase
         yield 'claim ttl' => [['linking' => ['claim_ttl' => 'x']]];
         yield 'confirmation ttl' => [['linking' => ['confirmation_ttl' => 'x']]];
         yield 'app name' => [['default_app' => 'Bad App']];
+        yield 'limiter pool @' => [['linking' => ['rate_limiter_cache_pool' => '@']]];
+        yield 'limiter pool not a string' => [['linking' => ['rate_limiter_cache_pool' => 42]]];
     }
 
     /**
@@ -112,6 +115,17 @@ final class ExtensionTest extends TestCase
         self::assertTrue($service->hasDefinition(AccountLinker::class));
         self::assertTrue($service->hasDefinition(AccountLinkController::class));
         self::assertTrue($service->hasDefinition('nowo_slack_kit.linking.confirmation_per_target'));
+        self::assertSame('cache.app', (string) $service->getDefinition('nowo_slack_kit.linking.confirmation_per_target.storage')->getArgument(0));
+        self::assertSame('cache.app', (string) $service->getDefinition('nowo_slack_kit.test_connection.rate_limiter.storage')->getArgument(0));
+    }
+
+    public function testLinkingLimiterCachePool(): void
+    {
+        $container = $this->load(['linking' => ['enabled' => true, 'identity_store' => 'app.ids', 'account_resolver' => 'app.accounts', 'rate_limiter_cache_pool' => '@cache.rate_limiter']]);
+        foreach (['claim_per_account', 'email_lookup_per_account', 'confirmation_per_account', 'confirmation_per_target'] as $name) {
+            self::assertSame('cache.rate_limiter', (string) $container->getDefinition('nowo_slack_kit.linking.' . $name . '.storage')->getArgument(0));
+        }
+        self::assertSame('cache.app', (string) $container->getDefinition('nowo_slack_kit.test_connection.rate_limiter.storage')->getArgument(0));
     }
 
     /**

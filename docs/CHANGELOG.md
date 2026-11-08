@@ -6,15 +6,22 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+  - [Added](#added)
 - [[1.0.1] - 2026-11-05](#101---2026-11-05)
   - [Documentation](#documentation)
 - [[1.0.0] - 2026-11-05](#100---2026-11-05)
-  - [Added](#added)
+  - [Added](#added-1)
   - [Security (REQ-SEC-004 audit, appendix FS)](#security-req-sec-004-audit-appendix-fs)
   - [Interim decisions (aligned with symfony-beacon 1.122.1)](#interim-decisions-aligned-with-symfony-beacon-11221)
   - [Notes / deviations from contract v1.1](#notes--deviations-from-contract-v11)
 
 ## [Unreleased]
+
+### Added
+
+- `linking.rate_limiter_cache_pool` (default `cache.app`): cache pool service id behind the four linking rate
+  limiters, so a host can use `cache.rate_limiter` or a persistent pool in tests instead of redefining
+  `nowo_slack_kit.linking.*.storage` services. The default keeps today's storage.
 
 ## [1.0.1] - 2026-11-05
 
