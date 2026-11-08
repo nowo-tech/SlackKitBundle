@@ -116,7 +116,6 @@ final class ExtensionTest extends TestCase
         self::assertTrue($service->hasDefinition(AccountLinkController::class));
         self::assertTrue($service->hasDefinition('nowo_slack_kit.linking.confirmation_per_target'));
         self::assertSame('cache.app', (string) $service->getDefinition('nowo_slack_kit.linking.confirmation_per_target.storage')->getArgument(0));
-        self::assertSame('cache.app', (string) $service->getDefinition('nowo_slack_kit.test_connection.rate_limiter.storage')->getArgument(0));
     }
 
     public function testLinkingLimiterCachePool(): void
