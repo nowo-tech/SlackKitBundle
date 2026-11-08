@@ -68,7 +68,7 @@ verify-only keys from `interactions.previous_secrets`.
 
 `AccountLinker` implements claim, find-by-e-mail, send-confirmation, confirm and unlink on top of the host's
 `SlackIdentityStoreInterface`, the installation store, the API client, the codec and four `RateLimiterFactory`
-instances (`nowo_slack_kit.linking.*`, `cache.app` storage). `ConfirmLinkHandler` is the built-in handler of
+instances (`nowo_slack_kit.linking.*`, storage in `linking.rate_limiter_cache_pool`, default `cache.app`). `ConfirmLinkHandler` is the built-in handler of
 `nowo_slack_kit.link.confirm` (`requiresActor: false`). `AccountLinkController` exposes the POST actions; the account
 id always comes from `SlackAccountResolverInterface`.
 

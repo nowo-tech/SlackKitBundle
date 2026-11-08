@@ -77,6 +77,7 @@ nowo_slack_kit:
         confirmation_ttl: PT24H       # exp of the confirmation button
         email_lookup: false           # "Find me by e-mail"; also needs the installation flag and users:read.email
         return_route: null            # route the account actions redirect to (null: /)
+        rate_limiter_cache_pool: cache.app # cache pool service id holding the four limiters' counters
         claim_per_account:        { limit: 10, interval: '1 hour' }
         email_lookup_per_account: { limit: 5,  interval: '1 hour' }
         confirmation_per_account: { limit: 3,  interval: '1 hour' }
@@ -316,7 +317,12 @@ Requires two host services (ids, not classes) — see [USAGE.md](USAGE.md#accoun
   verification time);
 - `account_resolver`: `SlackAccountResolverInterface` (current user → account id).
 
-The four limiters are fixed-window Symfony rate limiters stored in `cache.app` (`limiter` keys `acc:<account>` and
+The four limiters are fixed-window Symfony rate limiters stored in the `rate_limiter_cache_pool` cache pool (default
+`cache.app`; `@` prefix accepted). Point it at `cache.rate_limiter` (FrameworkBundle's pool), a Redis pool, or, in
+tests, a pool that survives between requests when `cache.app` is an `ArrayAdapter`. The pool must keep the counters:
+a `NullAdapter` pool fails the container compile in every environment, and an `ArrayAdapter` pool (one request, or
+one worker) fails it unless `kernel.debug` is true or the environment is `test` (`LinkingLimiterPoolPass`, audit
+IL-L2). The *Test connection* limiter keeps `cache.app` whatever this option says. `limiter` keys `acc:<account>` and
 `slack:<team>:<user>` for the per-target confirmation limit). A refusal sends nothing, returns `RATE_LIMITED` and
 dispatches `SlackConfirmationRateLimitedEvent`.
 

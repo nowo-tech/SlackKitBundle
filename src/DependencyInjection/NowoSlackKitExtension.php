@@ -125,7 +125,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
      */
     public function load(array $configs, ContainerBuilder $container): void
     {
-        /** @var array{default_locale: string, api: array{timeout: float, max_duration: float, max_response_bytes: int}, default_app: string, apps: array<string, array{app_id: string|null, signing_secret: string|null}>, credentials: array{store: string, settings_section: string}, ingress: array{enabled: bool, prefix: string, interactions_path: string|null, events_path: string|null, events_enabled: bool, max_body_bytes: int, max_skew_seconds: int, replay_lock_factory: string, max_secret_candidates: int, signing_secret_resolver: string|null, resolver_actors: bool, async: bool, transport: string}, interactions: array{value_ttl: string, previous_secrets: list<string>, legacy_value_key: string|null, legacy_action_map: array<string, string>, legacy_until: string|null}, linking: array{enabled: bool, identity_store: string|null, account_resolver: string|null, claim_ttl: string, confirmation_ttl: string, email_lookup: bool, return_route: string|null, claim_per_account: array{limit: int, interval: string}, email_lookup_per_account: array{limit: int, interval: string}, confirmation_per_account: array{limit: int, interval: string}, confirmation_per_target: array{limit: int, interval: string}}, test_connection: array{enabled: bool, rate_limit: array{limit: int, interval: string}}, rate_limit: array{max_retry_after: int, max_attempts: int}, notifier: array{enabled: bool}, ui: array{prefix: string}} $config */
+        /** @var array{default_locale: string, api: array{timeout: float, max_duration: float, max_response_bytes: int}, default_app: string, apps: array<string, array{app_id: string|null, signing_secret: string|null}>, credentials: array{store: string, settings_section: string}, ingress: array{enabled: bool, prefix: string, interactions_path: string|null, events_path: string|null, events_enabled: bool, max_body_bytes: int, max_skew_seconds: int, replay_lock_factory: string, max_secret_candidates: int, signing_secret_resolver: string|null, resolver_actors: bool, async: bool, transport: string}, interactions: array{value_ttl: string, previous_secrets: list<string>, legacy_value_key: string|null, legacy_action_map: array<string, string>, legacy_until: string|null}, linking: array{enabled: bool, identity_store: string|null, account_resolver: string|null, claim_ttl: string, confirmation_ttl: string, email_lookup: bool, return_route: string|null, rate_limiter_cache_pool: string, claim_per_account: array{limit: int, interval: string}, email_lookup_per_account: array{limit: int, interval: string}, confirmation_per_account: array{limit: int, interval: string}, confirmation_per_target: array{limit: int, interval: string}}, test_connection: array{enabled: bool, rate_limit: array{limit: int, interval: string}}, rate_limit: array{max_retry_after: int, max_attempts: int}, notifier: array{enabled: bool}, ui: array{prefix: string}} $config */
         $config = $this->processConfiguration(new Configuration(), $configs);
         $this->assertLiteralBooleans($config);
         $this->assertSecretsFromEnvironment($container, $config);
@@ -373,7 +373,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
      */
     private function registerLinking(ContainerBuilder $container, array $config): void
     {
-        /** @var array{default_locale: string, default_app: string, linking: array{enabled: bool, identity_store: string|null, account_resolver: string|null, claim_ttl: string, confirmation_ttl: string, email_lookup: bool, return_route: string|null, claim_per_account: array{limit: int, interval: string}, email_lookup_per_account: array{limit: int, interval: string}, confirmation_per_account: array{limit: int, interval: string}, confirmation_per_target: array{limit: int, interval: string}}} $config */
+        /** @var array{default_locale: string, default_app: string, linking: array{enabled: bool, identity_store: string|null, account_resolver: string|null, claim_ttl: string, confirmation_ttl: string, email_lookup: bool, return_route: string|null, rate_limiter_cache_pool: string, claim_per_account: array{limit: int, interval: string}, email_lookup_per_account: array{limit: int, interval: string}, confirmation_per_account: array{limit: int, interval: string}, confirmation_per_target: array{limit: int, interval: string}}} $config */
         $linking = $config['linking'];
         if (!$linking['enabled']) {
             return;
@@ -386,7 +386,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
 
         $limiters = [];
         foreach (['claim_per_account', 'email_lookup_per_account', 'confirmation_per_account', 'confirmation_per_target'] as $name) {
-            $limiters[$name] = $this->limiter($container, 'nowo_slack_kit.linking.' . $name, $linking[$name]);
+            $limiters[$name] = $this->limiter($container, 'nowo_slack_kit.linking.' . $name, $linking[$name], ltrim($linking['rate_limiter_cache_pool'], '@'));
         }
         $container->setDefinition(AccountLinker::class, (new Definition(AccountLinker::class, [
             new Reference($linking['identity_store']),
@@ -455,10 +455,11 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
 
     /**
      * @param array{limit: int, interval: string} $budget
+     * @param string $cachePool cache pool service id behind the limiter storage
      */
-    private function limiter(ContainerBuilder $container, string $id, array $budget): Reference
+    private function limiter(ContainerBuilder $container, string $id, array $budget, string $cachePool = 'cache.app'): Reference
     {
-        $container->setDefinition($id . '.storage', new Definition(CacheStorage::class, [new Reference('cache.app')]));
+        $container->setDefinition($id . '.storage', new Definition(CacheStorage::class, [new Reference($cachePool)]));
         $container->setDefinition($id, new Definition(RateLimiterFactory::class, [
             ['id' => $id, 'policy' => 'fixed_window', 'limit' => $budget['limit'], 'interval' => $budget['interval']],
             new Reference($id . '.storage'),

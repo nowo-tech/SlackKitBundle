@@ -5,11 +5,32 @@ are listed per target version.
 
 ## Table of contents
 
+- [Unreleased](#unreleased)
 - [Installing 1.0.0](#installing-100)
   - [From scratch](#from-scratch)
   - [Adopting it from an in-app Slack integration](#adopting-it-from-an-in-app-slack-integration)
   - [Production lock store](#production-lock-store)
   - [Values already posted to Slack](#values-already-posted-to-slack)
+
+## Unreleased
+
+No action required: `linking.rate_limiter_cache_pool` defaults to `cache.app`, the pool used before.
+
+Hosts that redefined `nowo_slack_kit.linking.confirmation_per_*.storage` (for example in `when@test`, because
+`cache.app` is an `ArrayAdapter` reset between requests) can delete those service definitions and set:
+
+```yaml
+nowo_slack_kit:
+    linking:
+        rate_limiter_cache_pool: cache.rate_limiter
+```
+
+The pool must persist: the build now fails when the linking limiters' pool (the option, or `cache.app` by default) is a
+`NullAdapter`, or an `ArrayAdapter` outside `kernel.debug` / the `test` environment. A production `cache.app` on the
+array or null adapter must move the limiters to a persistent pool with this option.
+
+Put it under `when@test` to keep production on `cache.app`, or use it in every env to keep limiter counters in the
+rate-limiter pool.
 
 ## Installing 1.0.0
 

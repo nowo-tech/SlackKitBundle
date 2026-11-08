@@ -6,6 +6,7 @@ namespace Nowo\SlackKitBundle;
 
 use Nowo\SlackKitBundle\DependencyInjection\Compiler\ActionHandlerPass;
 use Nowo\SlackKitBundle\DependencyInjection\Compiler\CsrfPass;
+use Nowo\SlackKitBundle\DependencyInjection\Compiler\LinkingLimiterPoolPass;
 use Nowo\SlackKitBundle\DependencyInjection\Compiler\ReplayLockPass;
 use Nowo\SlackKitBundle\DependencyInjection\NowoSlackKitExtension;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -40,6 +41,7 @@ final class NowoSlackKitBundle extends Bundle
         $container->addCompilerPass(new ActionHandlerPass());
         $container->addCompilerPass(new CsrfPass());
         $container->addCompilerPass(new ReplayLockPass());
+        $container->addCompilerPass(new LinkingLimiterPoolPass());
     }
 
     /**
