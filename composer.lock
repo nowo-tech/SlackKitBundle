@@ -6592,25 +6592,26 @@
         },
         {
             "name": "nowo-tech/instance-settings-bundle",
-            "version": "v1.3.1",
+            "version": "v1.7.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/nowo-tech/InstanceSettingsBundle.git",
-                "reference": "96bd39620d8a26e0552f4243e5deb54035b40c1e"
+                "reference": "c0014bf447cc73c6d6e014ef9e84f27acba79c89"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/nowo-tech/InstanceSettingsBundle/zipball/96bd39620d8a26e0552f4243e5deb54035b40c1e",
-                "reference": "96bd39620d8a26e0552f4243e5deb54035b40c1e",
+                "url": "https://api.github.com/repos/nowo-tech/InstanceSettingsBundle/zipball/c0014bf447cc73c6d6e014ef9e84f27acba79c89",
+                "reference": "c0014bf447cc73c6d6e014ef9e84f27acba79c89",
                 "shasum": ""
             },
             "require": {
+                "doctrine/dbal": "^4.0",
                 "doctrine/doctrine-bundle": "^2.13 || ^3.0",
                 "doctrine/orm": "^3.3",
                 "doctrine/persistence": "^3.1 || ^4.0",
                 "nowo-tech/doctrine-encrypt-bundle": "^2.10",
                 "nowo-tech/form-kit-bundle": "^2.17",
-                "nowo-tech/ui-kit-bundle": "^2.23",
+                "nowo-tech/ui-kit-bundle": "^2.40",
                 "php": ">=8.2 <8.6",
                 "psr/clock": "^1.0",
                 "psr/event-dispatcher": "^1.0",
@@ -6636,10 +6637,13 @@
                 "twig/string-extra": "^3.12",
                 "twig/twig": "^3.12"
             },
+            "conflict": {
+                "nowo-tech/brand-contracts": "<1.0 || >=2.0"
+            },
             "require-dev": {
-                "doctrine/dbal": "^3.8 || ^4.0",
                 "friendsofphp/php-cs-fixer": "^3.0",
                 "igor-php/igor-php": "^0.10.1",
+                "nowo-tech/brand-contracts": "^1.0",
                 "nowo-tech/phpstan-frankenphp": "^1.0",
                 "phpstan/extension-installer": "^1.4",
                 "phpstan/phpstan": "^2.0",
@@ -6657,9 +6661,12 @@
                 "symfony/yaml": "^7.4 || ^8.0"
             },
             "suggest": {
+                "ext-gd": "Required (with PNG, JPEG and WebP support) when a section declares an image field (1.4)",
+                "nowo-tech/brand-contracts": "Required for the brand bridge (brand.enabled: true, 1.5): BrandProviderInterface for UiKit, Pwa, MailKit, LegalKit and SeoKit",
                 "symfony/flex": "For automatic recipe installation",
                 "symfony/security-bundle": "Required for the admin UI unless security.allow_unauthenticated is true (dev / demo only)",
-                "symfony/translation": "To return a TranslatableMessage (key + parameters) from SettingsSectionInterface::getIntro()"
+                "symfony/translation": "To return a TranslatableMessage (key + parameters) from SettingsSectionInterface::getIntro()",
+                "symfony/yaml": "To load YAML seed files with nowo:instance-settings:seed (1.7; JSON seed files need nothing)"
             },
             "type": "symfony-bundle",
             "extra": {
@@ -6716,8 +6723,8 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-11-02T18:11:55+00:00",
-            "published-time": "2026-11-02T18:14:10+00:00"
+            "time": "2026-11-09T11:45:55+00:00",
+            "published-time": "2026-11-09T11:48:40+00:00"
         },
         {
             "name": "nowo-tech/phpstan-frankenphp",
