@@ -231,6 +231,7 @@ make release-check
 - [Installation](docs/INSTALLATION.md)
 - [Configuration](docs/CONFIGURATION.md)
 - [Usage](docs/USAGE.md)
+  - [Using it from a DDD / hexagonal application](docs/USAGE.md#using-it-from-a-ddd--hexagonal-application)
 - [Templates](docs/TEMPLATES.md)
 - [Security](docs/SECURITY.md)
 - [Upgrading](docs/UPGRADING.md)
