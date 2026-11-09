@@ -23,6 +23,7 @@
 - [Notifier transport](#notifier-transport)
 - [Events reference](#events-reference)
 - [Twig functions](#twig-functions)
+- [Using it from a DDD / hexagonal application](#using-it-from-a-ddd--hexagonal-application)
 
 ## Installations and the Web API client
 
@@ -446,3 +447,69 @@ No event carries a token, a signature or a raw body.
 | --- | --- |
 | `nowo_slack_kit_ingress_url(kind = 'interactions', app = null)` | Absolute URL of the interactions or events endpoint (per app when `app` is given) |
 | `nowo_slack_kit_link_card()` | View data of the account card (`status`, `slack_user_id`, `claim_form`, `actions`), or `null` |
+
+## Using it from a DDD / hexagonal application
+
+SlackKitBundle is an **infrastructure adapter**: outbound it talks to the Slack Web API, inbound it verifies
+Slack requests and hands them to your handlers. It has no Doctrine mapping and no entities; everything it needs to
+store goes through interfaces you implement, and your accounts are only ever seen as opaque string ids.
+
+**Keep the domain free of the bundle**
+
+- Define your own port in the domain (for example `ChatNotifier`) and implement it in infrastructure with
+  `SlackApiClientInterface` (`postMessage()`, `postEphemeral()`, `openDirectMessage()`…). Domain code never sees
+  `SlackMessage` or `Blocks`.
+- Implement the persistence ports in your infrastructure layer, mapped to your own tables:
+  - `SlackIdentityStoreInterface` (`linking.identity_store`) — account links (`SlackLink`) plus account status,
+    e-mail and locale lookups by account id;
+  - `SlackAccountResolverInterface` (`linking.account_resolver`) — the current account id;
+  - `SlackInstallationStoreInterface` (`credentials.store: <service id>`) if you do not use InstanceSettings;
+    validate it with `SlackInstallationStoreContractTestCase`.
+- Treat `#[AsSlackActionHandler]` handlers as driving adapters (like controllers): read `SlackInteraction`
+  (`actionId`, `data`, `actor?->accountId`, `interactionId` as idempotency key), call an application command, and
+  return a `SlackInteractionReply`.
+- React to the bundle's Symfony events in infrastructure listeners and translate them to your own domain events:
+  `SlackAccountVerifiedEvent`, `SlackAccountUnlinkedEvent`, `SlackLinkReleasedEvent`, `SlackInstallationRevokedEvent`,
+  `SlackInstallationUnhealthyEvent`, `SlackEventReceivedEvent`, `SlackActionHandledEvent`.
+
+**Adapter sketch**
+
+```php
+final readonly class SlackApprovalNotifier implements ApprovalNotifier // your domain port
+{
+    public function __construct(
+        private SlackApiClientInterface $slack,
+        private ButtonValueCodec $codec,
+        private SlackInstallationKey $installation,
+    ) {}
+
+    public function askApproval(ApprovalRequest $request, string $slackUserId): void
+    {
+        $channel = $this->slack->openDirectMessage($this->installation, SlackUserId::fromString($slackUserId));
+        $value = $this->codec->sign('acme.approval.approve', ['id' => $request->id()]);
+        $this->slack->postMessage($this->installation, $channel, /* SlackMessage built with Blocks and $value */);
+    }
+}
+
+#[AsSlackActionHandler('acme.approval.approve')]
+final readonly class ApproveFromSlack implements SlackActionHandlerInterface
+{
+    public function __construct(private ApproveRequestHandler $approve) {}
+
+    public function handle(SlackInteraction $interaction): SlackInteractionReply
+    {
+        ($this->approve)(new ApproveRequest((string) $interaction->string('id'), $interaction->actor?->accountId));
+
+        return SlackInteractionReply::done();
+    }
+}
+```
+
+**Known limitations**
+
+- `ButtonValueCodec`, `AccountLinker` and `IncomingWebhookClient` are final classes without an interface: keep them
+  inside your infrastructure adapters (do not inject them into application services) and test those adapters with
+  integration tests.
+- `SlackEventReceivedEvent::$event` and `SlackInteractionReceivedEvent::$payload` are raw Slack arrays; parse them in
+  the listener, not in the domain.
+- The bundle requires FormKit and UiKit even if you only use the API client and the ingress.

@@ -18,6 +18,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Documentation
+
+- USAGE: new section "Using it from a DDD / hexagonal application" (where the bundle sits in a hexagonal host, the ports, events and DTOs to build an anti-corruption layer on, and the known limitations).
+
 ## [1.1.0] - 2026-11-08
 
 `linking.rate_limiter_cache_pool` chooses the cache pool of the linking limiters, and a pool that would switch the limits off (`NullAdapter`, or `ArrayAdapter` outside debug/test) fails the build (Beacon C9). Audit: Appendix IL and Delta IL, Pass.
