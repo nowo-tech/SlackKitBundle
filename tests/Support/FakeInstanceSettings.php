@@ -6,6 +6,7 @@ namespace Nowo\SlackKitBundle\Tests\Support;
 
 use LogicException;
 use Nowo\InstanceSettingsBundle\Event\SettingsChangedEvent;
+use Nowo\InstanceSettingsBundle\File\StoredSettingFile;
 use Nowo\InstanceSettingsBundle\Settings\InstanceSettingsInterface;
 
 use function array_key_exists;
@@ -69,6 +70,11 @@ final class FakeInstanceSettings implements InstanceSettingsInterface
     public function hasSecret(string $key): bool
     {
         return array_key_exists($key, $this->secrets);
+    }
+
+    public function getFile(string $key): ?StoredSettingFile
+    {
+        return null;
     }
 
     public function isOverridden(string $key): bool
