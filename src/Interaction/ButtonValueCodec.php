@@ -47,7 +47,7 @@ use const SORT_STRING;
  * 16 bytes of HMAC-SHA256(key, "nsk1\n" + action_id + "\n" + payload_b64), base64url without padding, constant-time
  * comparison. Stateless: safe in FrankenPHP workers.
  */
-final readonly class ButtonValueCodec
+final readonly class ButtonValueCodec implements ButtonValueCodecInterface
 {
     /** Version prefix. */
     public const VERSION = 'nsk1';

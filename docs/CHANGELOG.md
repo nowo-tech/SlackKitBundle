@@ -6,17 +6,29 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
-- [[1.1.0] - 2026-11-08](#110---2026-11-08)
   - [Added](#added)
-- [[1.0.1] - 2026-11-05](#101---2026-11-05)
   - [Documentation](#documentation)
-- [[1.0.0] - 2026-11-05](#100---2026-11-05)
+- [[1.1.0] - 2026-11-08](#110---2026-11-08)
   - [Added](#added-1)
+- [[1.0.1] - 2026-11-05](#101---2026-11-05)
+  - [Documentation](#documentation-1)
+- [[1.0.0] - 2026-11-05](#100---2026-11-05)
+  - [Added](#added-2)
   - [Security (REQ-SEC-004 audit, appendix FS)](#security-req-sec-004-audit-appendix-fs)
   - [Interim decisions (aligned with symfony-beacon 1.122.1)](#interim-decisions-aligned-with-symfony-beacon-11221)
   - [Notes / deviations from contract v1.1](#notes--deviations-from-contract-v11)
 
 ## [Unreleased]
+
+Target: 1.2.0 (DDD P2). See [UPGRADING](UPGRADING.md#to-120).
+
+### Added
+
+- `Nowo\SlackKitBundle\Interaction\ButtonValueCodecInterface` (`sign()`, `signUntil()`, `verify()`) and
+  `Nowo\SlackKitBundle\Linking\AccountLinkerInterface` (`linkOf()`, `canFindByEmail()`, `claim()`, `findByEmail()`,
+  `sendConfirmation()`, `confirm()`, `unlink()`), implemented by `ButtonValueCodec` / `AccountLinker` (still
+  `final readonly`) and registered as public aliases of them. The interaction router, the account linker, the account
+  link controller, the Twig extension and the *Confirm* handler now reference the interface ids.
 
 ### Documentation
 

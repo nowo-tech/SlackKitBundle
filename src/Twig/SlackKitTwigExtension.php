@@ -8,7 +8,7 @@ use Nowo\FormKitBundle\Form\CsrfOnlyFormFactory;
 use Nowo\SlackKitBundle\Controller\AccountLinkController;
 use Nowo\SlackKitBundle\Form\SlackUserIdType;
 use Nowo\SlackKitBundle\Ingress\IngressController;
-use Nowo\SlackKitBundle\Linking\AccountLinker;
+use Nowo\SlackKitBundle\Linking\AccountLinkerInterface;
 use Nowo\SlackKitBundle\Linking\SlackAccountResolverInterface;
 use Nowo\SlackKitBundle\Linking\SlackLink;
 use Nowo\SlackKitBundle\NowoSlackKitBundle;
@@ -29,14 +29,14 @@ final class SlackKitTwigExtension extends AbstractExtension
 {
     /**
      * @param UrlGeneratorInterface $urls router
-     * @param AccountLinker|null $linker linking state machine (null: linking disabled)
+     * @param AccountLinkerInterface|null $linker linking state machine (null: linking disabled)
      * @param SlackAccountResolverInterface|null $accounts current account
      * @param FormFactoryInterface|null $forms form factory
      * @param CsrfOnlyFormFactory|null $csrfForms FormKit CSRF-only forms
      */
     public function __construct(
         private readonly UrlGeneratorInterface $urls,
-        private readonly ?AccountLinker $linker = null,
+        private readonly ?AccountLinkerInterface $linker = null,
         private readonly ?SlackAccountResolverInterface $accounts = null,
         private readonly ?FormFactoryInterface $forms = null,
         private readonly ?CsrfOnlyFormFactory $csrfForms = null,
@@ -64,7 +64,7 @@ final class SlackKitTwigExtension extends AbstractExtension
     public function linkCard(): ?array
     {
         $account = $this->accounts?->currentAccountId();
-        if (!$this->linker instanceof AccountLinker || $account === null || !$this->forms instanceof FormFactoryInterface || !$this->csrfForms instanceof CsrfOnlyFormFactory) {
+        if (!$this->linker instanceof AccountLinkerInterface || $account === null || !$this->forms instanceof FormFactoryInterface || !$this->csrfForms instanceof CsrfOnlyFormFactory) {
             return null;
         }
         $link   = $this->linker->linkOf($account);

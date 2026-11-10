@@ -101,9 +101,9 @@ use Nowo\SlackKitBundle\Api\SlackMessage;
 use Nowo\SlackKitBundle\BlockKit\Blocks;
 use Nowo\SlackKitBundle\Credentials\SlackInstallationKey;
 use Nowo\SlackKitBundle\Id\SlackUserId;
-use Nowo\SlackKitBundle\Interaction\ButtonValueCodec;
+use Nowo\SlackKitBundle\Interaction\ButtonValueCodecInterface;
 
-public function __construct(private SlackApiClientInterface $slack, private ButtonValueCodec $codec) {}
+public function __construct(private SlackApiClientInterface $slack, private ButtonValueCodecInterface $codec) {}
 
 $installation = SlackInstallationKey::default();
 $channel      = $this->slack->openDirectMessage($installation, SlackUserId::fromString('U00000001'));

@@ -6,6 +6,7 @@ are listed per target version.
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [To 1.2.0](#to-120)
 - [To 1.1.0](#to-110)
 - [Installing 1.0.0](#installing-100)
   - [From scratch](#from-scratch)
@@ -14,6 +15,20 @@ are listed per target version.
   - [Values already posted to Slack](#values-already-posted-to-slack)
 
 ## Unreleased
+
+## To 1.2.0
+
+From **1.1.0** (target 1.2.0, DDD P2):
+
+```bash
+composer update nowo-tech/slack-kit-bundle
+```
+
+Nothing to change. New `ButtonValueCodecInterface` and `AccountLinkerInterface` (public aliases of `ButtonValueCodec`
+and `AccountLinker`): prefer them in your type hints. The bundle's own services now reference the interface ids, so
+if you decorate or replace `ButtonValueCodec` / `AccountLinker`, do it on the interface id (decorating the class id
+still works, because the alias points at it). A replacement codec must keep the `nsk1` format if buttons already
+posted to Slack must still verify.
 
 ## To 1.1.0
 

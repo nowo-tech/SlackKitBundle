@@ -19,7 +19,7 @@ use Nowo\SlackKitBundle\Event\SlackConfirmationRateLimitedEvent;
 use Nowo\SlackKitBundle\Event\SlackLinkReleasedEvent;
 use Nowo\SlackKitBundle\Id\SlackTeamId;
 use Nowo\SlackKitBundle\Id\SlackUserId;
-use Nowo\SlackKitBundle\Interaction\ButtonValueCodec;
+use Nowo\SlackKitBundle\Interaction\ButtonValueCodecInterface;
 use Nowo\SlackKitBundle\Interaction\LegacyValuePolicy;
 use Nowo\SlackKitBundle\Interaction\SlackInteraction;
 use Nowo\SlackKitBundle\Interaction\SlackInteractionReply;
@@ -36,7 +36,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * button, confirm, unlink. A verified link is never taken; an unverified one yields to a proven claim or after
  * `claim_ttl`. Every message-sending step is rate limited per account and per target (OTHER REQ-THROTTLE-005).
  */
-final readonly class AccountLinker
+final readonly class AccountLinker implements AccountLinkerInterface
 {
     /** `action_id` of the confirmation button. */
     public const CONFIRM_ACTION = 'nowo_slack_kit.link.confirm';
@@ -45,7 +45,7 @@ final readonly class AccountLinker
      * @param SlackIdentityStoreInterface $identities host accounts
      * @param SlackInstallationStoreInterface $installations installation store
      * @param SlackApiClientInterface $api Web API client
-     * @param ButtonValueCodec $codec `nsk1` codec
+     * @param ButtonValueCodecInterface $codec `nsk1` codec
      * @param ClockInterface $clock clock
      * @param array{claim_per_account: RateLimiterFactoryInterface, email_lookup_per_account: RateLimiterFactoryInterface, confirmation_per_account: RateLimiterFactoryInterface, confirmation_per_target: RateLimiterFactoryInterface} $limiters rate limiters
      * @param int $claimTtlSeconds age after which an unverified claim yields
@@ -63,7 +63,7 @@ final readonly class AccountLinker
         private SlackIdentityStoreInterface $identities,
         private SlackInstallationStoreInterface $installations,
         private SlackApiClientInterface $api,
-        private ButtonValueCodec $codec,
+        private ButtonValueCodecInterface $codec,
         private ClockInterface $clock,
         private array $limiters,
         private int $claimTtlSeconds = 86_400,

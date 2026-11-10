@@ -38,7 +38,7 @@ final readonly class InteractionRouter
     /**
      * @param ContainerInterface $handlers handler services keyed by `action_id`
      * @param array<string, bool> $requiresActor `action_id` → whether the handler needs an actor
-     * @param ButtonValueCodec $codec `nsk1` codec
+     * @param ButtonValueCodecInterface $codec `nsk1` codec
      * @param LegacyValuePolicy $legacy legacy value policy
      * @param ActorResolver $actors actor resolution
      * @param ReplyDispatcher $replies deferred Slack calls
@@ -50,7 +50,7 @@ final readonly class InteractionRouter
     public function __construct(
         private ContainerInterface $handlers,
         private array $requiresActor,
-        private ButtonValueCodec $codec,
+        private ButtonValueCodecInterface $codec,
         private LegacyValuePolicy $legacy,
         private ActorResolver $actors,
         private ReplyDispatcher $replies,

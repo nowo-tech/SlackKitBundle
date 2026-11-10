@@ -119,11 +119,12 @@ $blocks = [
 
 ## Signed button values (nsk1)
 
-Every button that triggers a handler should carry a value signed with `ButtonValueCodec`:
+Every button that triggers a handler should carry a value signed with `ButtonValueCodecInterface` (since 1.2; the
+default implementation and public alias target is `ButtonValueCodec`):
 
 ```php
 use Nowo\SlackKitBundle\Id\SlackTeamId;
-use Nowo\SlackKitBundle\Interaction\ButtonValueCodec;
+use Nowo\SlackKitBundle\Interaction\ButtonValueCodecInterface; // inject it as $codec
 
 $value = $codec->sign('acme.issue.resolve', ['p' => $projectId, 'i' => $issueId]);                  // no team
 $value = $codec->sign('acme.task.done', ['t' => '42'], SlackTeamId::fromString('T00000000'));      // with team
@@ -337,7 +338,9 @@ flashes; none reveals which account holds an id. Overrides: [TEMPLATES.md](TEMPL
 
 ### Linker API
 
-`AccountLinker` (public service) for hosts with their own UI:
+`AccountLinkerInterface` (since 1.2; public alias of `AccountLinker`, registered when `linking.enabled`) for hosts
+with their own UI. The bundle's controller, Twig extension and *Confirm* handler use the alias, so a decorator
+registered under it applies to them too:
 
 | Method | Result |
 | --- | --- |
@@ -465,6 +468,8 @@ store goes through interfaces you implement, and your accounts are only ever see
   - `SlackAccountResolverInterface` (`linking.account_resolver`) — the current account id;
   - `SlackInstallationStoreInterface` (`credentials.store: <service id>`) if you do not use InstanceSettings;
     validate it with `SlackInstallationStoreContractTestCase`.
+- Application services that sign button values or drive account linking depend on `ButtonValueCodecInterface` and
+  `AccountLinkerInterface` (since 1.2), so they can be unit-tested with doubles.
 - Treat `#[AsSlackActionHandler]` handlers as driving adapters (like controllers): read `SlackInteraction`
   (`actionId`, `data`, `actor?->accountId`, `interactionId` as idempotency key), call an application command, and
   return a `SlackInteractionReply`.
@@ -479,7 +484,7 @@ final readonly class SlackApprovalNotifier implements ApprovalNotifier // your d
 {
     public function __construct(
         private SlackApiClientInterface $slack,
-        private ButtonValueCodec $codec,
+        private ButtonValueCodecInterface $codec,
         private SlackInstallationKey $installation,
     ) {}
 
@@ -507,9 +512,8 @@ final readonly class ApproveFromSlack implements SlackActionHandlerInterface
 
 **Known limitations**
 
-- `ButtonValueCodec`, `AccountLinker` and `IncomingWebhookClient` are final classes without an interface: keep them
-  inside your infrastructure adapters (do not inject them into application services) and test those adapters with
-  integration tests.
+- `IncomingWebhookClient` is a final class without an interface: keep it inside your infrastructure adapters.
+  (`ButtonValueCodecInterface` and `AccountLinkerInterface` cover the codec and the linker since 1.2.)
 - `SlackEventReceivedEvent::$event` and `SlackInteractionReceivedEvent::$payload` are raw Slack arrays; parse them in
   the listener, not in the domain.
 - The bundle requires FormKit and UiKit even if you only use the API client and the ingress.
