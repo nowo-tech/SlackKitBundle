@@ -31,10 +31,12 @@ use Nowo\SlackKitBundle\Ingress\SignatureVerifier;
 use Nowo\SlackKitBundle\Interaction\ActorResolver;
 use Nowo\SlackKitBundle\Interaction\AsSlackActionHandler;
 use Nowo\SlackKitBundle\Interaction\ButtonValueCodec;
+use Nowo\SlackKitBundle\Interaction\ButtonValueCodecInterface;
 use Nowo\SlackKitBundle\Interaction\InteractionRouter;
 use Nowo\SlackKitBundle\Interaction\LegacyValuePolicy;
 use Nowo\SlackKitBundle\Interaction\ReplyDispatcher;
 use Nowo\SlackKitBundle\Linking\AccountLinker;
+use Nowo\SlackKitBundle\Linking\AccountLinkerInterface;
 use Nowo\SlackKitBundle\Linking\ConfirmLinkHandler;
 use Nowo\SlackKitBundle\Linking\SlackAccountResolverInterface;
 use Nowo\SlackKitBundle\Linking\SlackIdentityStoreInterface;
@@ -155,7 +157,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
 
         $container->setDefinition(SlackKitTwigExtension::class, (new Definition(SlackKitTwigExtension::class, [
             new Reference('router'),
-            $config['linking']['enabled'] ? new Reference(AccountLinker::class) : null,
+            $config['linking']['enabled'] ? new Reference(AccountLinkerInterface::class) : null,
             $config['linking']['enabled'] ? new Reference((string) $config['linking']['account_resolver']) : null,
             new Reference('form.factory', ContainerInterface::NULL_ON_INVALID_REFERENCE),
             new Reference(CsrfOnlyFormFactory::class, ContainerInterface::NULL_ON_INVALID_REFERENCE),
@@ -261,6 +263,8 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
             new Reference('clock'),
             $this->seconds($interactions['value_ttl']),
         ]))->setPublic(true));
+        // Documented API (1.2, DDD P2): the router and the linker use the interface id.
+        $container->setAlias(ButtonValueCodecInterface::class, ButtonValueCodec::class)->setPublic(true);
 
         $until = null;
         if ($interactions['legacy_until'] !== null) {
@@ -300,7 +304,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
         $container->setDefinition(InteractionRouter::class, (new Definition(InteractionRouter::class, [
             new ServiceLocatorArgument([]),
             [],
-            new Reference(ButtonValueCodec::class),
+            new Reference(ButtonValueCodecInterface::class),
             new Reference(LegacyValuePolicy::class),
             new Reference(ActorResolver::class),
             new Reference(ReplyDispatcher::class),
@@ -392,7 +396,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
             new Reference($linking['identity_store']),
             new Reference(SlackInstallationStoreInterface::class),
             new Reference(SlackApiClientInterface::class),
-            new Reference(ButtonValueCodec::class),
+            new Reference(ButtonValueCodecInterface::class),
             new Reference('clock'),
             $limiters,
             $this->seconds($linking['claim_ttl']),
@@ -405,10 +409,12 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
             new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE),
             new Reference(LegacyValuePolicy::class),
         ]))->setPublic(true)->addTag('monolog.logger', ['channel' => 'slack']));
-        $container->setDefinition(ConfirmLinkHandler::class, (new Definition(ConfirmLinkHandler::class, [new Reference(AccountLinker::class)]))
+        // Documented API (1.2, DDD P2): the bundle's own services use the interface id, so a host replacement applies everywhere.
+        $container->setAlias(AccountLinkerInterface::class, AccountLinker::class)->setPublic(true);
+        $container->setDefinition(ConfirmLinkHandler::class, (new Definition(ConfirmLinkHandler::class, [new Reference(AccountLinkerInterface::class)]))
             ->addTag(NowoSlackKitBundle::HANDLER_TAG, ['action' => AccountLinker::CONFIRM_ACTION, 'requires_actor' => false]));
         $container->setDefinition(AccountLinkController::class, (new Definition(AccountLinkController::class, [
-            new Reference(AccountLinker::class),
+            new Reference(AccountLinkerInterface::class),
             new Reference($linking['account_resolver']),
             new Reference('form.factory'),
             new Reference(CsrfOnlyFormFactory::class),

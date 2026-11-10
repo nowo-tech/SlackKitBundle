@@ -15,10 +15,10 @@ use Nowo\SlackKitBundle\Interaction\SlackInteractionReply;
 final readonly class ConfirmLinkHandler implements SlackActionHandlerInterface
 {
     /**
-     * @param AccountLinker $linker linking state machine
+     * @param AccountLinkerInterface $linker linking state machine
      */
     public function __construct(
-        private AccountLinker $linker,
+        private AccountLinkerInterface $linker,
     ) {
     }
 

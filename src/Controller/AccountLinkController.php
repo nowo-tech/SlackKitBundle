@@ -6,7 +6,7 @@ namespace Nowo\SlackKitBundle\Controller;
 
 use Nowo\FormKitBundle\Form\CsrfOnlyFormFactory;
 use Nowo\SlackKitBundle\Form\SlackUserIdType;
-use Nowo\SlackKitBundle\Linking\AccountLinker;
+use Nowo\SlackKitBundle\Linking\AccountLinkerInterface;
 use Nowo\SlackKitBundle\Linking\LinkResult;
 use Nowo\SlackKitBundle\Linking\SlackAccountResolverInterface;
 use Symfony\Component\Form\FormFactoryInterface;
@@ -36,7 +36,7 @@ final readonly class AccountLinkController
     public const UNLINK  = 'nowo_slack_kit_link_unlink';
 
     /**
-     * @param AccountLinker $linker linking state machine
+     * @param AccountLinkerInterface $linker linking state machine
      * @param SlackAccountResolverInterface $accounts current account
      * @param FormFactoryInterface $forms form factory (claim form)
      * @param CsrfOnlyFormFactory $csrfForms FormKit CSRF-only forms (other actions)
@@ -45,7 +45,7 @@ final readonly class AccountLinkController
      * @param TranslatorInterface|null $translator translator of the flash messages
      */
     public function __construct(
-        private AccountLinker $linker,
+        private AccountLinkerInterface $linker,
         private SlackAccountResolverInterface $accounts,
         private FormFactoryInterface $forms,
         private CsrfOnlyFormFactory $csrfForms,
