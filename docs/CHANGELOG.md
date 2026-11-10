@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.2.0] - 2026-11-10](#120---2026-11-10)
   - [Added](#added)
   - [Documentation](#documentation)
 - [[1.1.0] - 2026-11-08](#110---2026-11-08)
@@ -20,6 +21,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-10
+
 Target: 1.2.0 (DDD P2). See [UPGRADING](UPGRADING.md#to-120).
 
 ### Added
@@ -33,6 +36,8 @@ Target: 1.2.0 (DDD P2). See [UPGRADING](UPGRADING.md#to-120).
 ### Documentation
 
 - USAGE: new section "Using it from a DDD / hexagonal application" (where the bundle sits in a hexagonal host, the ports, events and DTOs to build an anti-corruption layer on, and the known limitations).
+
+[1.2.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.2.0
 
 ## [1.1.0] - 2026-11-08
 
@@ -291,5 +296,5 @@ Decided by the owner on 2026-11-05 so that Beacon's adoption is a no-op:
   (OAuth, 1.1). VarDumper and the profiler show `[redacted]` through `SlackSecret::__debugInfo()`; there is no
   separate caster.
 
-[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.2.0...HEAD
 [1.0.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.0.0
