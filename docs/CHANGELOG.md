@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.2.1] - 2026-11-12](#121---2026-11-12)
+  - [Fixed](#fixed)
+  - [Changed](#changed)
 - [[1.2.0] - 2026-11-10](#120---2026-11-10)
   - [Added](#added)
   - [Documentation](#documentation)
@@ -20,6 +23,8 @@ All notable changes to this project are documented here. The format follows
   - [Notes / deviations from contract v1.1](#notes--deviations-from-contract-v11)
 
 ## [Unreleased]
+
+## [1.2.1] - 2026-11-12
 
 Target: **1.2.1** (patch).
 
@@ -47,6 +52,8 @@ Target: **1.2.1** (patch).
 - Worker test: `MemoryStoreWorkerTest` sends 1,000 requests through `http_kernel` (no services resetter) for two
   workspaces in alternation, each installing the app for its own workspace, and checks that no request sees the
   other's installation, the Messenger and nested console boundaries, and flat memory. Worker audit refreshed.
+
+[1.2.1]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.2.1
 
 ## [1.2.0] - 2026-11-10
 
@@ -323,5 +330,5 @@ Decided by the owner on 2026-11-05 so that Beacon's adoption is a no-op:
   (OAuth, 1.1). VarDumper and the profiler show `[redacted]` through `SlackSecret::__debugInfo()`; there is no
   separate caster.
 
-[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.2.1...HEAD
 [1.0.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.0.0
