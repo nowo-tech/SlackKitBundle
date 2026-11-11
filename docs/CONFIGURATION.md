@@ -119,7 +119,7 @@ named app.
 | `store` | Behaviour |
 | --- | --- |
 | `instance_settings` (default) | `InstanceSettingsInstallationStore`: one app, one installation, section `settings_section` (default `slack`) with `bot_token` (secret), `signing_secret` (secret), `team_id`, `allow_email_lookup`. Requires `nowo-tech/instance-settings-bundle`; enables the **Slack** settings section and *Test connection* |
-| `memory` | `InMemoryInstallationStore` (tests, demos); reset on `kernel.reset` |
+| `memory` | `InMemoryInstallationStore` (tests, demos); back to its initial state at every request, Messenger message and outermost console command, and on `kernel.reset` |
 | any other string | The service id of your `SlackInstallationStoreInterface` (multi-tenant hosts) |
 
 The store contract (encryption at rest, scoped reads, idempotent `markRevoked()`) is in
