@@ -19,6 +19,7 @@ use Nowo\SlackKitBundle\Api\SlackApiClientInterface;
 use Nowo\SlackKitBundle\Controller\AccountLinkController;
 use Nowo\SlackKitBundle\Controller\TestConnectionController;
 use Nowo\SlackKitBundle\Credentials\InMemoryInstallationStore;
+use Nowo\SlackKitBundle\Credentials\InMemoryInstallationStoreBoundaryListener;
 use Nowo\SlackKitBundle\Credentials\InstanceSettingsInstallationStore;
 use Nowo\SlackKitBundle\Credentials\SlackAppRegistry;
 use Nowo\SlackKitBundle\Credentials\SlackInstallationKey;
@@ -49,6 +50,7 @@ use Nowo\SlackKitBundle\Settings\SlackSettingsNoticeProviderInterface;
 use Nowo\SlackKitBundle\Settings\SlackSettingsSection;
 use Nowo\SlackKitBundle\Twig\SlackKitTwigExtension;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
+use Symfony\Component\DependencyInjection\Argument\IteratorArgument;
 use Symfony\Component\DependencyInjection\Argument\ServiceLocatorArgument;
 use Symfony\Component\DependencyInjection\Argument\TaggedIteratorArgument;
 use Symfony\Component\DependencyInjection\ChildDefinition;
@@ -197,7 +199,17 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
             return true;
         }
         if ($store === 'memory') {
+            // Tests and demos only: installations live in the worker's memory and are restored at every boundary.
+            if ($container->hasParameter('kernel.debug') && $container->getParameter('kernel.debug') === false
+                && $container->hasParameter('kernel.environment') && $container->getParameter('kernel.environment') !== 'test') {
+                throw new LogicException('NowoSlackKitBundle: credentials.store: memory is for tests and demos only, never in production (refused outside kernel.debug and the test env). Use instance_settings or your own SlackInstallationStoreInterface service.');
+            }
             $container->setDefinition(InMemoryInstallationStore::class, (new Definition(InMemoryInstallationStore::class))->addTag('kernel.reset', ['method' => 'reset']));
+            // REQ-RUNTIME-002: back to the initial state at the request / message / console boundaries too. A lazy
+            // iterator of an IGNORE_ON_UNINITIALIZED reference: a boundary never builds the store.
+            $container->setDefinition(InMemoryInstallationStoreBoundaryListener::class, (new Definition(InMemoryInstallationStoreBoundaryListener::class, [
+                new IteratorArgument([new Reference(InMemoryInstallationStore::class, ContainerInterface::IGNORE_ON_UNINITIALIZED_REFERENCE)]),
+            ]))->addTag('kernel.event_subscriber'));
             $container->setAlias(SlackInstallationStoreInterface::class, InMemoryInstallationStore::class)->setPublic(true);
 
             return false;

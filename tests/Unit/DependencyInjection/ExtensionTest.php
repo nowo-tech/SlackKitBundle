@@ -101,6 +101,19 @@ final class ExtensionTest extends TestCase
         self::assertSame([], $container->getParameter('nowo_slack_kit.interactions.legacy_action_map'));
     }
 
+    public function testMemoryStoreIsRefusedInProduction(): void
+    {
+        // Allowed in debug and in the test env.
+        foreach ([[true, 'prod'], [false, 'test'], [true, 'dev']] as [$debug, $env]) {
+            $container = $this->load(['credentials' => ['store' => 'memory'], 'ingress' => ['enabled' => false]], params: ['kernel.debug' => $debug, 'kernel.environment' => $env]);
+            self::assertSame(InMemoryInstallationStore::class, (string) $container->getAlias(SlackInstallationStoreInterface::class));
+        }
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('never in production');
+        $this->load(['credentials' => ['store' => 'memory'], 'ingress' => ['enabled' => false]], params: ['kernel.debug' => false, 'kernel.environment' => 'prod']);
+    }
+
     public function testMemoryStoreAndServiceStore(): void
     {
         $memory = $this->load(['credentials' => ['store' => 'memory'], 'notifier' => ['enabled' => true], 'ingress' => ['enabled' => false]]);
@@ -302,10 +315,11 @@ final class ExtensionTest extends TestCase
     /**
      * @param array<string, mixed> $config
      * @param array<int, string> $missing
+     * @param array<string, mixed> $params kernel parameters (kernel.debug, kernel.environment)
      */
-    private function load(array $config, array $missing = []): ContainerBuilder
+    private function load(array $config, array $missing = [], array $params = []): ContainerBuilder
     {
-        $container = new ContainerBuilder(new EnvPlaceholderParameterBag(['kernel.secret' => 'test-secret-not-real']));
+        $container = new ContainerBuilder(new EnvPlaceholderParameterBag(['kernel.secret' => 'test-secret-not-real'] + $params));
         $extension = new NowoSlackKitExtension(
             $missing[0] ?? InstanceSettingsInterface::class,
             $missing[1] ?? MessageBusInterface::class,

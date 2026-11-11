@@ -10,6 +10,7 @@ use Doctrine\Persistence\ManagerRegistry;
 use Nowo\InstanceSettingsBundle\Settings\InstanceSettingsInterface;
 use Nowo\SlackKitBundle\Tests\Support\FakeIdentityStore;
 use Nowo\SlackKitBundle\Tests\Support\FakeSlackApi;
+use Nowo\SlackKitBundle\Tests\Support\MemoryStoreProbeController;
 use Nowo\SlackKitBundle\Tests\Support\ProfileController;
 use Nowo\SlackKitBundle\Tests\Support\RecordingLogger;
 use Nowo\SlackKitBundle\Tests\Support\TokenAccountResolver;
@@ -57,12 +58,14 @@ abstract class KernelTestCase extends TestCase
                 $services->set('test.fake_slack_api', FakeSlackApi::class)->public();
                 $services->set('test.identities', FakeIdentityStore::class)->public();
                 $services->set(ProfileController::class)->autowire()->tag('controller.service_arguments')->public();
+                $services->set(MemoryStoreProbeController::class)->autowire()->tag('controller.service_arguments')->public();
                 $services->set('test.accounts', TokenAccountResolver::class)->args([new ReferenceConfigurator('security.token_storage')])->public();
             },
             static function (RoutingConfigurator $routes): void {
                 $routes->import('.', 'nowo_instance_settings');
                 $routes->import('.', 'nowo_slack_kit');
                 $routes->add('test_profile', '/profile')->controller('Nowo\SlackKitBundle\Tests\Support\ProfileController');
+                $routes->add('test_store_probe', '/test/store-probe')->controller(MemoryStoreProbeController::class);
             },
             $environment,
             $framework,

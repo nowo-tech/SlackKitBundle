@@ -17,6 +17,13 @@ are listed per target version.
 
 ## Unreleased
 
+Target **1.2.1**.
+
+- `credentials.store: memory` is for tests and demos only. The container build now fails with a `LogicException` when
+  it is used with `kernel.debug` false outside the `test` env. If a production config uses it, switch to
+  `instance_settings` (default) or your own `SlackInstallationStoreInterface` service; installations in that store
+  never survived the process anyway.
+
 ## To 1.2.0
 
 From **1.1.0**:

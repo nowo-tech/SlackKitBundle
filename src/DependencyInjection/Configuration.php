@@ -57,7 +57,7 @@ final class Configuration implements ConfigurationInterface
                 ->arrayNode('credentials')
                     ->addDefaultsIfNotSet()
                     ->children()
-                        ->scalarNode('store')->defaultValue('instance_settings')->cannotBeEmpty()->info('instance_settings | memory | <service id implementing SlackInstallationStoreInterface>.')->end()
+                        ->scalarNode('store')->defaultValue('instance_settings')->cannotBeEmpty()->info('instance_settings | memory (tests and demos only, never in production: refused outside kernel.debug and the test env) | <service id implementing SlackInstallationStoreInterface>.')->end()
                         ->scalarNode('settings_section')->defaultValue('slack')->cannotBeEmpty()->end()
                     ->end()
                 ->end()
