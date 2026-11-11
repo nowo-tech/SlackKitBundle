@@ -87,6 +87,9 @@ final class InMemoryInstallationStoreBoundaryListener implements EventSubscriber
         return $events;
     }
 
+    /**
+     * Main request: starts with the initial store; sub-requests share the main request's unit of work.
+     */
     public function onKernelRequest(RequestEvent $event): void
     {
         if (!$event->isMainRequest()) {
@@ -96,6 +99,9 @@ final class InMemoryInstallationStoreBoundaryListener implements EventSubscriber
         $this->clear();
     }
 
+    /**
+     * Start of a Messenger message: nothing from the previous message or the worker's idle time is kept.
+     */
     public function onMessageReceived(): void
     {
         // @igor-ignore - Unit-of-work flag, set and unset at the Messenger boundaries.
@@ -103,6 +109,9 @@ final class InMemoryInstallationStoreBoundaryListener implements EventSubscriber
         $this->clear();
     }
 
+    /**
+     * End of a message (handled or failed).
+     */
     public function onMessageFinished(): void
     {
         // @igor-ignore - Unit-of-work flag, set and unset at the Messenger boundaries.
@@ -110,12 +119,18 @@ final class InMemoryInstallationStoreBoundaryListener implements EventSubscriber
         $this->clear();
     }
 
+    /**
+     * The worker stopped (a received message may have been skipped without a handled / failed event).
+     */
     public function onWorkerStopped(): void
     {
         // @igor-ignore - Unit-of-work flag, set and unset at the Messenger boundaries.
         $this->messageInFlight = false;
     }
 
+    /**
+     * A command starts (nested in-process runs count).
+     */
     public function onConsoleCommand(): void
     {
         // @igor-ignore - Nesting counter of the running commands (no request data).
