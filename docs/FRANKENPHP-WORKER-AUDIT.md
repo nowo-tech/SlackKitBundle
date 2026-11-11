@@ -58,7 +58,7 @@ in Messenger consumers started with `--no-reset`, and in long-running console co
 | `AccountLinker`, `ConfirmLinkHandler`, `AccountLinkController`, `TestConnectionController` | `readonly`; limiters and forms created per call | ✅ |
 | `InstanceSettingsInstallationStore`, `SlackAppRegistry` | `readonly`; read InstanceSettings per call | ✅ |
 | `InMemoryInstallationStore` | array of installations (tests, demo) | ✅ (restored at the main `kernel.request`, `kernel.terminate`, Messenger received / handled / failed and the outermost `console.terminate`; `kernel.reset`) |
-| `InMemoryInstallationStoreBoundaryListener` (with `store: memory`, 1.2.1) | console depth counter and in-flight message flag (no request data; deliberately not `kernel.reset`) | ✅ |
+| `InMemoryInstallationStoreBoundaryListener` (with `store: memory`, 1.2.1) | console depth counter and in-flight message / request flags (no request data; deliberately not `kernel.reset`) | ✅ |
 | `SlackSettingsSection`, `SlackKitTwigExtension` | no mutable state | ✅ |
 | `SlackKitRouteLoader` | load-once flag at router warm-up | ✅ (`@igor-ignore` with reason) |
 | `SlackKitTransportFactory`, `SlackKitTransport`, `RateLimitRetryMiddleware` | `readonly` | ✅ |
@@ -74,8 +74,8 @@ in Messenger consumers started with `--no-reset`, and in long-running console co
   installation (before 1.2.1 the second request already saw the first workspace's installation).
 - **Memory:** within **2 MiB** of the value after request 20 (the test logger's records are dropped per request).
 - **Boundaries:** a sub-request keeps the main unit; Messenger received / handled / failed / stopped; a command
-  nested in a message or in another command does not clear the outer unit, the outermost one does; a boundary never
-  builds the store; other stores get no boundary listener.
+  nested in a message, in another command or in an HTTP request does not clear the outer unit, the outermost one
+  does; a boundary never builds the store; other stores get no boundary listener.
 
 The bundle has no Doctrine entity manager of its own (the `instance_settings` store reads InstanceSettings per call).
 A host that disables or bypasses the services resetter must clear its own entity managers at every boundary (main

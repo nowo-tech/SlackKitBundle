@@ -30,8 +30,9 @@ Target: **1.2.1** (patch).
   app's first installation, so a later request for another workspace could get the previous workspace's installation
   (bot token). The new `InMemoryInstallationStoreBoundaryListener`, registered with the `memory` store, restores the
   initial state at the main `kernel.request`, `kernel.terminate`, Messenger received / handled / failed, and
-  `console.terminate` of the outermost command only (a depth counter plus an in-flight message flag keep a nested
-  in-process command from clearing the outer unit). The store stays `ResetInterface` / `kernel.reset`; the boundary
+  `console.terminate` of the outermost command only, outside any Messenger message or HTTP request (a depth counter
+  plus in-flight message and request flags keep a command run in-process from another command, a message handler or
+  a controller from clearing the outer unit). The store stays `ResetInterface` / `kernel.reset`; the boundary
   never builds it (`IGNORE_ON_UNINITIALIZED_REFERENCE`). Precondition: only where the services resetter does not run
   between units: a host that removes, replaces or bypasses `services_resetter` (or drives `http_kernel` directly),
   Messenger consumers started with `--no-reset`, and long-running console commands; with the stock kernel
@@ -40,6 +41,9 @@ Target: **1.2.1** (patch).
 
 ### Changed
 
+- `credentials.store: memory` is tests and demos only, never in production: the container build now fails with a
+  `LogicException` when it is used with `kernel.debug` false outside the `test` env (as the replay lock store check
+  already does). See UPGRADING.
 - Worker test: `MemoryStoreWorkerTest` sends 1,000 requests through `http_kernel` (no services resetter) for two
   workspaces in alternation, each installing the app for its own workspace, and checks that no request sees the
   other's installation, the Messenger and nested console boundaries, and flat memory. Worker audit refreshed.

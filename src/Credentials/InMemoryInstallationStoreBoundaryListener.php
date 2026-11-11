@@ -27,10 +27,11 @@ use function max;
  *
  * - main `kernel.request` (sub-requests share the main request's unit of work) and `kernel.terminate`;
  * - Messenger `WorkerMessageReceivedEvent`, `WorkerMessageHandledEvent` / `WorkerMessageFailedEvent`;
- * - `console.terminate`, only when it ends the OUTERMOST command and no Messenger message is in flight: a command run
- *   in-process from another command or from a message handler must not clear the outer unit. The depth is counted on
- *   `console.command` / `console.terminate`; the in-flight flag is set on message received and unset on handled /
- *   failed / worker stopped.
+ * - `console.terminate`, only when it ends the OUTERMOST command and no Messenger message or HTTP request is in flight:
+ *   a command run in-process from another command, from a message handler or from a controller must not clear the
+ *   outer unit. The depth is counted on `console.command` / `console.terminate`; the message flag is set on message
+ *   received and unset on handled / failed / worker stopped; the request flag is set on the main `kernel.request` and
+ *   unset on `kernel.terminate`.
  *
  * The store stays tagged `kernel.reset`; this subscriber keeps it correct where the services resetter does not run: a
  * host that removes or bypasses `services_resetter` (or drives `http_kernel` directly), Messenger consumers started
@@ -53,6 +54,9 @@ final class InMemoryInstallationStoreBoundaryListener implements EventSubscriber
     /** A Messenger message is being handled (between received and handled / failed). */
     private bool $messageInFlight = false;
 
+    /** A main HTTP request is being handled (between the main `kernel.request` and `kernel.terminate`). */
+    private bool $requestInFlight = false;
+
     /**
      * @param iterable<ResetInterface> $stores the {@see InMemoryInstallationStore} service
      */
@@ -68,7 +72,7 @@ final class InMemoryInstallationStoreBoundaryListener implements EventSubscriber
     {
         $events = [
             KernelEvents::REQUEST   => ['onKernelRequest', 4096],
-            KernelEvents::TERMINATE => ['clear', -4096],
+            KernelEvents::TERMINATE => ['onKernelTerminate', -4096],
         ];
 
         if (class_exists(WorkerMessageReceivedEvent::class)) {
@@ -96,6 +100,18 @@ final class InMemoryInstallationStoreBoundaryListener implements EventSubscriber
             return;
         }
 
+        // @igor-ignore - Unit-of-work flag, set and unset at the HTTP boundaries.
+        $this->requestInFlight = true;
+        $this->clear();
+    }
+
+    /**
+     * End of the main request (after the response was sent).
+     */
+    public function onKernelTerminate(): void
+    {
+        // @igor-ignore - Unit-of-work flag, set and unset at the HTTP boundaries.
+        $this->requestInFlight = false;
         $this->clear();
     }
 
@@ -138,13 +154,13 @@ final class InMemoryInstallationStoreBoundaryListener implements EventSubscriber
     }
 
     /**
-     * Clears only when the outermost command ends outside a Messenger message.
+     * Clears only when the outermost command ends outside a Messenger message and outside an HTTP request.
      */
     public function onConsoleTerminate(): void
     {
         // @igor-ignore - Nesting counter of the running commands (no request data).
         $this->consoleDepth = max(0, $this->consoleDepth - 1);
-        if ($this->consoleDepth > 0 || $this->messageInFlight) {
+        if ($this->consoleDepth > 0 || $this->messageInFlight || $this->requestInFlight) {
             return;
         }
 

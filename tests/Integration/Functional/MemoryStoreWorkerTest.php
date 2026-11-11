@@ -25,8 +25,11 @@ use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
+use Symfony\Component\HttpKernel\Event\TerminateEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
+use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\HttpKernel\TerminableInterface;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
@@ -148,6 +151,26 @@ final class MemoryStoreWorkerTest extends KernelTestCase
         $this->install($kernel, Fake::TEAM);
         $this->runNestedCommand($dispatcher);
         self::assertNull($this->lookup($kernel));
+    }
+
+    public function testCommandRunInsideARequestKeepsTheRequestUnit(): void
+    {
+        $kernel     = $this->memoryKernel();
+        $dispatcher = $this->dispatcher($kernel);
+        $request    = Request::create('/test/store-probe');
+
+        $dispatcher->dispatch(new RequestEvent($kernel, $request, HttpKernelInterface::MAIN_REQUEST), KernelEvents::REQUEST);
+        // A controller runs a command in-process after installing the app for this request's workspace.
+        $this->install($kernel, Fake::TEAM);
+        $this->runNestedCommand($dispatcher);
+        self::assertNotNull($this->lookup($kernel), 'A command inside a request keeps the request unit.');
+
+        $dispatcher->dispatch(new TerminateEvent($kernel, $request, new Response()), KernelEvents::TERMINATE);
+        self::assertNull($this->lookup($kernel), 'The request unit ends clean.');
+
+        $this->install($kernel, Fake::TEAM);
+        $this->runNestedCommand($dispatcher);
+        self::assertNull($this->lookup($kernel), 'Outside any request, the outermost command clears again.');
     }
 
     public function testBoundaryNeverBuildsTheStore(): void
