@@ -24,6 +24,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `composer test-coverage-100` now enforces **100%** (its name said 100, its script said 99). The CI coverage job already runs it, so the gate is 100% in CI too; the suite is at 100%.
+
 ## [1.2.1] - 2026-11-12
 
 Target: **1.2.1** (patch).

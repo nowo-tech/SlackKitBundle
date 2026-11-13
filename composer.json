@@ -129,7 +129,7 @@
         "test-coverage": "@php -d memory_limit=512M vendor/bin/phpunit --color=always --coverage-html coverage --coverage-clover coverage.xml --coverage-text",
         "test-coverage-100": [
             "@test-coverage",
-            "php .scripts/check-coverage.php coverage.xml --min-percent=99"
+            "php .scripts/check-coverage.php coverage.xml --min-percent=100"
         ],
         "validate-phpdoc": "php .scripts/complete-public-phpdoc.php",
         "cs-check": "php-cs-fixer fix --dry-run --diff",
@@ -148,7 +148,7 @@
     "scripts-descriptions": {
         "test": "Run PHPUnit tests",
         "test-coverage": "Run PHPUnit tests with code coverage",
-        "test-coverage-100": "Run test-coverage and fail if statement or element coverage is below 99% (REQ-TEST-003)",
+        "test-coverage-100": "Run test-coverage and fail if statement or element coverage is below 100% (REQ-TEST-003)",
         "validate-phpdoc": "Fail when a class or public method in src/ has no PHPDoc (REQ-CS-001)",
         "cs-check": "Check code style with PHP-CS-Fixer",
         "cs-fix": "Fix code style with PHP-CS-Fixer",

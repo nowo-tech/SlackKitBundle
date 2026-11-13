@@ -110,6 +110,6 @@ shared lock store (a local store fails the build outside debug and test).
 
 ## Success criteria
 
-- PHPUnit line coverage 100 % (gate ≥ 99 %), PHPStan level 8 with empty `ignoreErrors`, igor clean, Rector clean.
+- PHPUnit line coverage 100 % (gate 100 %), PHPStan level 8 with empty `ignoreErrors`, igor clean, Rector clean.
 - The §6.5.9 vectors match Beacon 1.122.1 byte for byte.
 - The demo (FrankenPHP worker, fake Slack) passes the Playwright happy path.
