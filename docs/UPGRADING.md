@@ -6,6 +6,9 @@ are listed per target version.
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [To 1.3.0](#to-130)
+  - [Several workspaces](#several-workspaces)
+  - [Message updates](#message-updates)
 - [To 1.2.1](#to-121)
 - [To 1.2.0](#to-120)
 - [To 1.2.0](#to-120-1)
@@ -17,6 +20,54 @@ are listed per target version.
   - [Values already posted to Slack](#values-already-posted-to-slack)
 
 ## Unreleased
+
+## To 1.3.0
+
+From **1.2.x**:
+
+```bash
+composer update nowo-tech/slack-kit-bundle
+```
+
+Target **1.3.0** (minor). Nothing to change for a single-workspace host: the `instance_settings` store keeps serving
+its one installation as before (it becomes "the default installation"), no data migration, no new table, and every
+new option is off by default. The bundle still ships no Doctrine mapping or migrations: multi-workspace data lives
+behind your own stores.
+
+Behaviour changes to check:
+
+- `SlackInstallationRevokedEvent` is dispatched **once** per installation: Slack sends `app_uninstalled` and
+  `tokens_revoked` together on uninstall, and only the first one now dispatches it. `tokens_revoked` without bot
+  tokens (or naming another bot than the installation's `botUserId`) no longer revokes.
+- `new SlackInstallation(...)` with a token that is not a bot token now throws `InvalidArgumentException`.
+- When an installation records its own Slack app id (`appId`), requests for it must carry that `api_app_id`; the
+  configured `apps.<name>.app_id` applies to installations without one.
+- Rate limits remembered by the API client are now keyed by the installation's workspace, so a 429 for one workspace
+  never blocks another (a key without a workspace still shares the app bucket).
+
+### Several workspaces
+
+Opt in with your own stores (a standard Symfony host can implement them with Doctrine entities in a few lines):
+
+1. Implement `SlackInstallationStoreInterface` for several installations, keyed by app + workspace (the enterprise
+   is informative: workspace ids are unique), and persist the new optional `SlackInstallation` fields you need. Encrypt
+   the bot token, refresh token and own-app signing secret at rest; compare ids exactly (binary collation on
+   MySQL / MariaDB). Extend `SlackMultiInstallationStoreContractTestCase` (and `SlackInstallationStoreContractTestCase`).
+   Point `credentials.store` at it. To keep today's instance app as the default installation, let `find()` fall back to
+   it for its workspace.
+2. Implement `SlackInstallationBindingStoreInterface` (extend `SlackInstallationBindingStoreContractTestCase`) and set
+   `installations.binding_store`.
+3. For "Add to Slack": implement `SlackInstallAuthorizerInterface`, set `installations.oauth` and
+   `apps.<name>.app_id`, `client_id` and `client_secret: '%env(SLACK_CLIENT_SECRET)%'`, register
+   `nowo_slack_kit_install_redirect_url()` as the app's OAuth redirect URL, turn **token rotation off** in the Slack app
+   (rotating grants are refused in 1.3), and render `nowo_slack_kit_install_action(type, id)` where admins manage
+   integrations.
+4. Listen to `SlackInstallationRevokedEvent` (its `bindings`) to disable destinations and notify the admins.
+
+### Message updates
+
+No action needed. Handlers may now return `->withSpentButtons($interaction, [...], 'Assigned to …')` and
+`->viaResponseUrl()`; existing replies behave as before.
 
 ## To 1.2.1
 

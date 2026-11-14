@@ -9,6 +9,7 @@ security switches must be literal booleans (REQ-SF-006).
 - [api](#api)
 - [apps and default_app](#apps-and-default_app)
 - [credentials](#credentials)
+- [installations](#installations)
 - [ingress](#ingress)
   - [Lock DSN with a fallback](#lock-dsn-with-a-fallback)
   - [Replay lock store in tests](#replay-lock-store-in-tests)
@@ -40,8 +41,21 @@ nowo_slack_kit:
     default_app: default
     apps:
         default:
-            app_id: null              # when set, api_app_id of every request must match
+            app_id: null              # when set, api_app_id of every request must match (unless the installation records its own); required for "Add to Slack"
             signing_secret: null      # null = from the installation store; otherwise '%env(SLACK_SIGNING_SECRET)%'
+            client_id: null           # OAuth client id ("Add to Slack", 1.3)
+            client_secret: null       # '%env(SLACK_CLIENT_SECRET)%' only
+
+    installations:                    # several workspaces (1.3, spec 237)
+        binding_store: null           # service id implementing SlackInstallationBindingStoreInterface | memory (tests / demos only)
+        oauth:
+            enabled: false            # "Add to Slack" routes under ui.prefix/install (literal boolean)
+            authorizer: null          # service id implementing SlackInstallAuthorizerInterface (required when enabled)
+            account_resolver: null    # SlackAccountResolverInterface service id (default: linking.account_resolver)
+            scopes: [chat:write, channels:read, groups:read, users:read]  # required; a grant without one is refused
+            optional_scopes: []       # requested, not required (chat:write.public, users:read.email…)
+            state_ttl: 600            # 60..600 s
+            return_route: null        # route the flow ends on (null: /)
 
     credentials:
         store: instance_settings      # instance_settings | memory (tests / demos only) | <service id implementing SlackInstallationStoreInterface>
@@ -124,6 +138,17 @@ named app.
 
 The store contract (encryption at rest, scoped reads, idempotent `markRevoked()`) is in
 [SECURITY.md](SECURITY.md#installation-store-contract).
+
+## installations
+
+Several workspaces behind one app (spec 237). `binding_store` gives owner scopes the use of installations; the
+revocation event lists them. `oauth.enabled` mounts "Add to Slack" (`POST {ui.prefix}/install/{app}/{scope_type}/{scope_id}`,
+`GET {ui.prefix}/install/callback`) and needs: a `credentials.store` that keeps several installations (not
+`instance_settings`), `binding_store`, `oauth.authorizer`, an account resolver, a non-empty `scopes` list, and for
+each app offered: `app_id`, `client_id` and `client_secret`. The single-use state uses `ingress.replay_lock_factory`
+and the session. Build-time refusals: `oauth` with the `instance_settings` store or without `binding_store`,
+authoriser or account resolver; empty `scopes`; a literal `client_secret`; `oauth.enabled` as an env placeholder;
+`binding_store: memory` outside debug and test.
 
 ## ingress
 

@@ -12,6 +12,7 @@ Report vulnerabilities as described in [.github/SECURITY.md](../.github/SECURITY
 - [Account linking](#account-linking)
 - [Secrets and logging](#secrets-and-logging)
 - [Installation store contract](#installation-store-contract)
+- [Several workspaces (1.3, spec 237)](#several-workspaces-13-spec-237)
 - [Residual risks](#residual-risks)
 - [Host responsibilities](#host-responsibilities)
 - [Testing with fakes only](#testing-with-fakes-only)
@@ -141,6 +142,23 @@ The contract is shipped as an abstract PHPUnit test case, `Nowo\SlackKitBundle\T
 `InstanceSettingsInstallationStore` relies on InstanceSettings' encrypted secrets; `markRevoked()` clears the stored
 bot token.
 
+## Several workspaces (1.3, spec 237)
+
+| Threat | Control |
+| --- | --- |
+| An event or click of workspace A acts as, reads for or answers with workspace B | The ingress resolves the installation of the payload's own workspace (and enterprise); the API client refuses a store answer for another workspace (`SlackInstallationKey::admits()`); `nsk1` values carry their workspace (`t`); the actor comes only from a verified link of the click's workspace; replies use the click's installation and token |
+| Per-team state left in a FrankenPHP worker | No per-request or per-team state in services: the reply queue is flushed at `kernel.terminate` and reset; in-memory stores reset at every boundary; the install state lives in the session. Worker test: one kernel, no resetter, two workspaces alternating |
+| Anonymous clicks | Handlers need an actor unless registered with `requiresActor: false`; without a link of the click's workspace every other handler is refused (403, ephemeral) |
+| Forged or replayed install callback (login CSRF, code injection) | POST + CSRF to start; host authoriser at start and on return; state = random nonce + HMAC (key derived from `kernel.secret`), record in the session with an account hash, 10-minute TTL, removed on first use and claimed with a lock (single use across processes); same account required |
+| Grant for another app, org-wide install, rotating token, missing scope | Refused before anything is saved (`app_mismatch`, `enterprise_install`, `token_rotation_unsupported`, `missing_scope`, `invalid_grant`); a user token in the answer is never kept |
+| Own-app secret speaks for another workspace | The own-app secret is chosen by the unverified workspace id only and verifies the whole body; the verified payload must then name that same workspace and carry the installation's `api_app_id` |
+| Uninstall / revocation | `app_uninstalled` and `tokens_revoked` (naming the installation's bot) revoke once; later requests from that workspace get 403; the event lists the bindings to disable |
+| Secrets in logs | OAuth code, state, client secret, bot / refresh tokens and `response_url` never reach the bundle's log lines or exception messages; the OAuth and response-URL clients use the logger-free HttpClient |
+
+The bundle stores nothing itself: the multi-installation and binding stores are the host's, under the
+[installation store contract](#installation-store-contract) (encrypt the bot token, refresh token and own-app signing
+secret at rest; compare workspace ids and scope ids exactly).
+
 ## Residual risks
 
 - **Replay memory needs an expiring shared lock store.** Outside debug and test only an allowlist builds (Redis,
@@ -155,6 +173,15 @@ bot token.
 - **Two replay memories during an adoption.** A host that already remembered signatures in its own store does not
   share that memory with the bundle, so a request captured in the minutes before the deploy could be replayed once
   after it. Accepted because handlers are idempotent.
+- **The OAuth callback URL carries the code and the state.** Symfony's router logs the request URI at `info`; the
+  code is single-use and exchanged at once and the state is single-use, but keep `info` request logs out of shared
+  sinks or filter the query string of `{ui.prefix}/install/callback`.
+- **Token rotation is not supported in 1.3.** Rotating grants are refused; refresh tokens and expiries can be stored
+  and an expired token is not sent (`token_expired`), but the bundle does not refresh tokens.
+- **A refused grant leaves the app installed in Slack.** The token is not saved, but the workspace admin approved the
+  install in Slack; it stays there until they remove the app.
+- **An own-app installation costs one store lookup per request whose app signature fails** (by the unverified
+  workspace id). Keep the ingress behind a proxy rate limit.
 - **Slack user ids are not secret.** The limiters, not secrecy, protect linking.
 - **Legacy unsigned values** are accepted while `interactions.legacy_until` is in the future (actor and ingress
   checks still apply; never on resolver-verified clicks). `legacy_until` must be a strict UTC instant

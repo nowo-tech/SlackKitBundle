@@ -6,9 +6,13 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+  - [Added (spec 237, T000a: several workspaces)](#added-spec-237-t000a-several-workspaces)
+  - [Added (spec 237, T000c: message updates)](#added-spec-237-t000c-message-updates)
+  - [Changed](#changed)
+  - [Security](#security)
 - [[1.2.1] - 2026-11-12](#121---2026-11-12)
   - [Fixed](#fixed)
-  - [Changed](#changed)
+  - [Changed](#changed-1)
 - [[1.2.0] - 2026-11-10](#120---2026-11-10)
   - [Added](#added)
   - [Documentation](#documentation)
@@ -24,9 +28,65 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+Target: **1.3.0** (minor; no breaking change, see [UPGRADING.md](UPGRADING.md#to-130)). Symfony Beacon spec 237
+"Slack multi-workspace with identity", tasks T000a and T000c (T000b, identities per workspace and link from a click,
+follows in 1.4.0).
+
+### Added (spec 237, T000a: several workspaces)
+
+- Installations keyed by **(app, enterprise?, workspace)**: `SlackInstallationKey` gains an optional
+  `SlackEnterpriseId` (`key()` is `app:team` or `app:enterprise:team`), `workspaceKey()`, `sameWorkspace()` and
+  `admits()`. `SlackInstallation` gains optional OAuth fields: enterprise, Slack app id, workspace name, granted scopes,
+  installer, install time, refresh token and expiry (token rotation), revocation reason and the signing secret of a
+  workspace's **own app** (FR-004), plus `storageKey()`, `withKey()`, `revoked()`, `withWorkspace()`, `hasScope()`,
+  `isTokenExpired()`.
+- Owner-scope **bindings**: `SlackOwnerScope` (host type + opaque id), `SlackInstallationBinding`, the port
+  `SlackInstallationBindingStoreInterface` (`installations.binding_store`), `InMemoryInstallationBindingStore`
+  (tests and demos) and the contract test cases `SlackInstallationBindingStoreContractTestCase` and
+  `SlackMultiInstallationStoreContractTestCase`.
+- **"Add to Slack"** (OAuth v2, `installations.oauth`, off by default): `POST <ui.prefix>/install/{app}/{type}/{id}`
+  (CSRF) and `GET <ui.prefix>/install/callback`; the host authoriser port `SlackInstallAuthorizerInterface`
+  (`SlackInstallAttempt`) decides who may install for a scope, at the start and again on the way back; signed,
+  single-use state bound to the session and the account (10 minutes); grant checks (bot token, same Slack app,
+  workspace install, required scopes, no token rotation); re-installing updates the token; `SlackOAuthClientInterface`
+  (`oauth.v2.access`), `SlackInstallationCompletedEvent`; `apps.<name>.client_id` / `client_secret` (`%env()%` only);
+  Twig `nowo_slack_kit_install_action()` and `nowo_slack_kit_install_redirect_url()`; translations in 7 locales.
+- Own-app installations: a click or event whose app secret does not match is verified with the own-app secret of the
+  installation named by its (unverified) workspace id, then checked against that installation's Slack app id.
+- `SlackInstallationRevokedEvent::$bindings`: the bindings of the revoked installation (FR-006).
+
+### Added (spec 237, T000c: message updates)
+
+- `MessageUpdate::withoutSpentButtons()`: the clicked message without its spent buttons (or every interactive
+  element) plus a context line such as "Assigned to Ana"; `SlackInteractionReply::withSpentButtons()` uses it for a
+  `chat.update` replacement.
+- `SlackInteraction::$message` (`SlackOriginalMessage`, the clicked message from the verified payload) and
+  `SlackInteraction::$responseUrl` (a redacted `SlackSecret` of kind `response_url`, `hooks.slack.com/actions` only).
+- `SlackInteractionReply::viaResponseUrl()`: ephemeral answers, replacements and deletions through the click's
+  `response_url` (no bot token; also for clicks verified by a host resolver); `ResponseUrlClientInterface` (public
+  alias) with `SlackResponseUrlReply`.
+- `SlackSecret` kinds `refresh_token`, `client_secret` and `response_url`.
+
 ### Changed
 
+- The Web API client refuses a store answer whose workspace (or enterprise) is not the key's (`not_installed`) and an
+  expired rotating token (`token_expired`), and remembers rate limits per workspace installation.
+- `app_uninstalled` / `tokens_revoked` revoke an active installation **once**: a second revocation event for the same
+  installation no longer dispatches `SlackInstallationRevokedEvent`, and `tokens_revoked` counts only when it names
+  the installation's bot (when the installation knows its bot user id).
+- The ingress checks the payload's enterprise against the installation's, and `api_app_id` against the installation's
+  own Slack app id when it records one (else `apps.<name>.app_id` as before).
+- `SlackInstallation` refuses a token of another kind than a bot token (it only ever worked with one).
 - `composer test-coverage-100` now enforces **100%** (its name said 100, its script said 99). The CI coverage job already runs it, so the gate is 100% in CI too; the suite is at 100%.
+
+### Security
+
+- Cross-workspace isolation is enforced at every layer: an installation is found only by its own workspace key, the
+  API client double-checks the store's answer, button values stay bound to their workspace, actors resolve only from a
+  link of the click's workspace, and replies use the click's own installation. Covered by unit tests and a FrankenPHP
+  worker test (one kernel, no resetter, two workspaces alternating).
+- The OAuth code, state, client secret and tokens never reach a log, an exception message or the session in clear
+  (the session keeps the state's record with an account hash only).
 
 ## [1.2.1] - 2026-11-12
 

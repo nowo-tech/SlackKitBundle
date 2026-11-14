@@ -20,6 +20,13 @@
 - [Settings section and Test connection](#settings-section-and-test-connection)
 - [Installation stores](#installation-stores)
   - [Testing your installation store](#testing-your-installation-store)
+- [Several workspaces (1.3)](#several-workspaces-13)
+  - [Standard Symfony host](#standard-symfony-host)
+  - [DDD / hexagonal host](#ddd--hexagonal-host)
+  - ["Add to Slack"](#add-to-slack)
+  - [Own apps](#own-apps)
+  - [Uninstall and token revocation](#uninstall-and-token-revocation)
+- [Updating the clicked message (1.3)](#updating-the-clicked-message-13)
 - [Notifier transport](#notifier-transport)
 - [Events reference](#events-reference)
 - [Twig functions](#twig-functions)
@@ -404,6 +411,169 @@ It checks that `find()` returns `SlackSecret` objects, that reads are scoped to 
 idempotent and leaves no usable installation, and, when `rawStorage()` returns the backend contents, that no secret
 is stored in clear. The bundle runs it against `InMemoryInstallationStore` and `InstanceSettingsInstallationStore`.
 
+## Several workspaces (1.3)
+
+A host with one Slack app keeps working unchanged: its installation is the **default installation**. To serve several
+workspaces, every installation is named by `SlackInstallationKey(app, team, enterprise?)` and stored by your
+`SlackInstallationStoreInterface`; an owner scope of your own (`SlackOwnerScope`: a type such as `organization` and an
+opaque id) gets the use of an installation through a **binding**, so two organizations in one workspace share one
+token and one revocation.
+
+Isolation rules the bundle enforces (spec 237): a store answer for another workspace is never used (the API client
+checks `SlackInstallationKey::admits()`), each click and event resolves its own workspace's installation, button
+values stay bound to their workspace, the actor comes only from a link of the click's workspace, and replies use the
+click's installation. Handlers still re-check the actor's access to the item.
+
+### Standard Symfony host
+
+Map two entities with attributes (or XML) and wrap them in the ports; encrypt the secrets with your encryption
+bundle:
+
+```php
+#[ORM\Entity]
+#[ORM\UniqueConstraint(columns: ['app', 'team_id'])]
+class SlackWorkspace
+{
+    #[ORM\Column(length: 32)] public string $app;
+    #[ORM\Column(length: 32, options: ['collation' => 'utf8mb4_bin'])] public string $teamId;
+    #[ORM\Column(length: 32, nullable: true)] public ?string $enterpriseId = null;
+    #[ORM\Column(type: 'text')] public string $botTokenEncrypted;          // never in clear
+    #[ORM\Column(type: 'json')] public array $scopes = [];
+    #[ORM\Column(nullable: true)] public ?\DateTimeImmutable $revokedAt = null;
+    // appId, teamName, botUserId, installerUserId, installedAt, ownSigningSecretEncrypted…
+}
+
+final readonly class DoctrineSlackStore implements SlackInstallationStoreInterface
+{
+    public function find(SlackInstallationKey $key): ?SlackInstallation
+    {
+        $row = $key->team ? $this->repo->findOneBy(['app' => $key->app, 'teamId' => $key->team->value]) : null;
+
+        return $row ? new SlackInstallation(
+            new SlackInstallationKey($row->app, SlackTeamId::fromString($row->teamId), SlackEnterpriseId::tryFrom($row->enterpriseId)),
+            SlackSecret::botToken($this->crypto->decrypt($row->botTokenEncrypted)),
+            SlackTeamId::fromString($row->teamId),
+            in_array('users:read.email', $row->scopes, true),
+            revokedAt: $row->revokedAt,
+            scopes: $row->scopes,
+        ) : null;
+    }
+    // findSigningSecret(), save() (upsert by app + team: a re-install updates the token), markRevoked() (idempotent)
+}
+```
+
+```yaml
+nowo_slack_kit:
+    credentials: { store: App\Slack\DoctrineSlackStore }
+    installations:
+        binding_store: App\Slack\DoctrineSlackBindings
+```
+
+Send with the installation of the destination: `$slack->postMessage(new SlackInstallationKey('default', $team),
+$channel, $message)`; list what a scope may use with `$bindings->bindingsFor(new SlackOwnerScope('organization',
+(string) $org->getId()))`.
+
+### DDD / hexagonal host
+
+Same ports, mapped in infrastructure (XML mapping, ids only): the bundle never sees your entities. Keep
+`SlackInstallationKey` / `SlackOwnerScope` at the adapter boundary and translate them to your own value objects.
+Validate the adapters with the shipped contract test cases:
+
+```php
+final class SlackWorkspaceRepositoryContractTest extends SlackMultiInstallationStoreContractTestCase
+{
+    protected function createEmptyStore(): SlackInstallationStoreInterface { return $this->freshRepository(); }
+}
+
+final class SlackBindingRepositoryContractTest extends SlackInstallationBindingStoreContractTestCase
+{
+    protected function createEmptyStore(): SlackInstallationBindingStoreInterface { return $this->freshBindings(); }
+}
+```
+
+### "Add to Slack"
+
+```yaml
+nowo_slack_kit:
+    apps:
+        default:
+            app_id: A0123456789                       # required: the grant must be for this app
+            client_id: '%env(SLACK_CLIENT_ID)%'
+            client_secret: '%env(SLACK_CLIENT_SECRET)%' # %env()% only
+    installations:
+        binding_store: App\Slack\DoctrineSlackBindings
+        oauth:
+            enabled: true
+            authorizer: App\Slack\InstallAuthorizer  # SlackInstallAuthorizerInterface
+            account_resolver: null                    # default: linking.account_resolver
+            scopes: [chat:write, channels:read, groups:read, users:read]
+            optional_scopes: [chat:write.public]      # add users:read.email only when e-mail lookup is on
+            return_route: app_integrations
+```
+
+```php
+final readonly class InstallAuthorizer implements SlackInstallAuthorizerInterface
+{
+    public function mayInstall(SlackInstallAttempt $attempt): bool
+    {
+        return $attempt->scope->type === 'organization' && $this->orgs->isAdmin($attempt->accountId, $attempt->scope->id);
+    }
+}
+```
+
+```twig
+{% set add = nowo_slack_kit_install_action('organization', organization.id) %}
+{% if add %}{{ include('@NowoUiKitBundle/partials/_action.html.twig', {action: add}) }}{% endif %}
+```
+
+Register `nowo_slack_kit_install_redirect_url()` (`<ui.prefix>/install/callback`) as the Slack app's redirect URL and
+keep **token rotation off** (rotating grants are refused in 1.3). The flow: POST with CSRF → authoriser → single-use
+state in the session (10 minutes, bound to the account) → Slack → callback: same session and account, authoriser
+again, `oauth.v2.access`, grant checks (bot token, `app_id`, workspace install, required scopes) → `save()` (a
+re-install updates the token) → `bind()` → `SlackInstallationCompletedEvent` → flash and redirect. Org-wide
+Enterprise Grid installs are refused. Slack's redirect is a top-level GET from slack.com, so the session cookie must
+be sent on it (`SameSite=Lax`, Symfony's default; `Strict` makes every callback fail as "invalid or expired").
+
+### Own apps
+
+A workspace whose policy forbids third-party apps can use its own Slack app: store its installation with the bot
+token **and** its own `signingSecret` (and `appId`, from `auth.test`). A click or event that the configured app's
+secret does not verify is tried with the own-app secret of the installation named by the request's workspace id, and
+then must carry that installation's `api_app_id`. Such clicks get an actor and Web API answers like any other.
+
+### Uninstall and token revocation
+
+With `ingress.events_enabled`, `app_uninstalled` and `tokens_revoked` (naming the installation's bot) call
+`markRevoked()` once and dispatch `SlackInstallationRevokedEvent` with the installation's `bindings`; mark their
+destinations broken and notify their admins. Later requests from that workspace are refused (403) until it is
+installed again.
+
+## Updating the clicked message (1.3)
+
+Handlers get the clicked message (`$interaction->message`, from the verified payload) and its `response_url`
+(`$interaction->responseUrl`, a redacted `SlackSecret`):
+
+```php
+#[AsSlackActionHandler('acme.issue.assign')]
+final readonly class AssignFromSlack implements SlackActionHandlerInterface
+{
+    public function handle(SlackInteraction $interaction): SlackInteractionReply
+    {
+        $issue = $this->assign->toActor($interaction->string('issue'), $interaction->actor);
+
+        return SlackInteractionReply::done()
+            // chat.update with the click's installation: drop the spent button, add "Assigned to Ana".
+            ->withSpentButtons($interaction, ['acme.issue.assign'], 'Assigned to ' . $issue->assigneeName());
+    }
+}
+```
+
+- `MessageUpdate::withoutSpentButtons($message, $spentActionIds, $context)` builds the same `SlackMessage` yourself
+  (empty list: every interactive element goes; an emptied `actions` block is dropped; the context line is escaped).
+- `->viaResponseUrl()` sends the ephemeral answer, replacement or deletion to the click's `response_url` instead of
+  the Web API (no bot token; works for clicks verified by a host resolver, which never get Web API answers). Without a
+  valid `response_url` the Web API is used. `ResponseUrlClientInterface` is public for your own calls.
+
 ## Notifier transport
 
 ```yaml
@@ -438,7 +608,8 @@ recipient opens a DM first. The `ChatMessage` subject becomes the fallback text 
 | `SlackAccountClaimedEvent` / `SlackAccountVerifiedEvent` / `SlackAccountUnlinkedEvent` | Linking transitions |
 | `SlackLinkReleasedEvent` | An unverified link yielded (holder, claimant, Slack id, reason `expired` / `claimed_by_email`) |
 | `SlackConfirmationRateLimitedEvent` | A linking limiter refused (account id, limiter) |
-| `SlackInstallationRevokedEvent` | `app_uninstalled` / `tokens_revoked` |
+| `SlackInstallationRevokedEvent` | `app_uninstalled` / `tokens_revoked`, once per installation, with its `bindings` (1.3) |
+| `SlackInstallationCompletedEvent` | "Add to Slack" saved and bound an installation (installation, scope, account id, re-install flag) |
 | `SlackInstallationUnhealthyEvent` | Repeated auth errors (at most every 10 min per installation) |
 | `SlackEventsRateLimitedEvent` | `app_rate_limited` callback |
 
@@ -450,6 +621,8 @@ No event carries a token, a signature or a raw body.
 | --- | --- |
 | `nowo_slack_kit_ingress_url(kind = 'interactions', app = null)` | Absolute URL of the interactions or events endpoint (per app when `app` is given) |
 | `nowo_slack_kit_link_card()` | View data of the account card (`status`, `slack_user_id`, `claim_form`, `actions`), or `null` |
+| `nowo_slack_kit_install_action(scope_type, scope_id, app = null)` | The "Add to Slack" UiKit `Action` (POST, CSRF) for a scope, or `null` (flow off, nobody signed in, authoriser refuses) |
+| `nowo_slack_kit_install_redirect_url()` | Absolute OAuth redirect URL to register in the Slack app, or `null` when the flow is off |
 
 ## Using it from a DDD / hexagonal application
 
@@ -462,7 +635,8 @@ store goes through interfaces you implement, and your accounts are only ever see
 - Define your own port in the domain (for example `ChatNotifier`) and implement it in infrastructure with
   `SlackApiClientInterface` (`postMessage()`, `postEphemeral()`, `openDirectMessage()`…). Domain code never sees
   `SlackMessage` or `Blocks`.
-- Implement the persistence ports in your infrastructure layer, mapped to your own tables:
+- Implement the persistence ports in your infrastructure layer, mapped to your own tables (several workspaces:
+  [Several workspaces](#ddd--hexagonal-host)):
   - `SlackIdentityStoreInterface` (`linking.identity_store`) — account links (`SlackLink`) plus account status,
     e-mail and locale lookups by account id;
   - `SlackAccountResolverInterface` (`linking.account_resolver`) — the current account id;
