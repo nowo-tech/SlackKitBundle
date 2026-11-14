@@ -7,6 +7,7 @@ namespace Nowo\SlackKitBundle\Tests\Support;
 use Nowo\SlackKitBundle\Credentials\InMemoryInstallationStore;
 use Nowo\SlackKitBundle\Credentials\SlackInstallation;
 use Nowo\SlackKitBundle\Credentials\SlackInstallationKey;
+use Nowo\SlackKitBundle\Id\SlackEnterpriseId;
 use Nowo\SlackKitBundle\Id\SlackTeamId;
 use Nowo\SlackKitBundle\Ingress\SignatureVerifier;
 use Nowo\SlackKitBundle\Security\SlackSecret;
@@ -18,25 +19,54 @@ use Symfony\Component\HttpClient\Response\MockResponse;
  */
 final class Fake
 {
-    public const TOKEN          = 'xoxb-test-not-a-real-token';
-    public const SIGNING_SECRET = 'testsigningsecretnotreal00000000';
-    public const OTHER_SECRET   = 'othersigningsecretnotreal0000000';
-    public const KERNEL_SECRET  = 'test-secret-not-real';
-    public const TEAM           = 'T00000000';
-    public const OTHER_TEAM     = 'T00000001';
-    public const USER           = 'U00000001';
-    public const OTHER_USER     = 'U00000002';
-    public const CHANNEL        = 'C00000001';
-    public const DM             = 'D00000001';
-    public const APP_ID         = 'A00000000';
-    public const NOW            = 1_793_836_800; // 2026-11-05T00:00:00Z
-    public const WEBHOOK        = 'https://hooks.slack.com/services/TFAKE0000/BFAKE0000/fakefakefakefakefake';
+    public const TOKEN            = 'xoxb-test-not-a-real-token';
+    public const SIGNING_SECRET   = 'testsigningsecretnotreal00000000';
+    public const OTHER_SECRET     = 'othersigningsecretnotreal0000000';
+    public const KERNEL_SECRET    = 'test-secret-not-real';
+    public const TEAM             = 'T00000000';
+    public const OTHER_TEAM       = 'T00000001';
+    public const USER             = 'U00000001';
+    public const OTHER_USER       = 'U00000002';
+    public const CHANNEL          = 'C00000001';
+    public const DM               = 'D00000001';
+    public const APP_ID           = 'A00000000';
+    public const NOW              = 1_793_836_800; // 2026-11-05T00:00:00Z
+    public const WEBHOOK          = 'https://hooks.slack.com/services/TFAKE0000/BFAKE0000/fakefakefakefakefake';
+    public const OTHER_TOKEN      = 'xoxb-test-not-a-real-token-two';
+    public const OTHER_APP_ID     = 'A00000001';
+    public const ENTERPRISE       = 'E00000000';
+    public const OTHER_ENTERPRISE = 'E00000001';
+    public const RESPONSE_URL     = 'https://hooks.slack.com/actions/TFAKE0000/0000000000/fakefakefakefake';
+    public const CLIENT_ID        = '1111111111.2222222222';
+    public const CLIENT_SECRET    = 'testclientsecretnotreal000000000';
+    public const REFRESH_TOKEN    = 'xoxe-1-test-not-a-real-refresh';
 
     public static function store(bool $withTeam = true, bool $emailLookup = true): InMemoryInstallationStore
     {
         return new InMemoryInstallationStore(
             [SlackInstallationKey::DEFAULT_APP => SlackSecret::signingSecret(self::SIGNING_SECRET)],
             [new SlackInstallation(SlackInstallationKey::default(), SlackSecret::botToken(self::TOKEN), $withTeam ? SlackTeamId::fromString(self::TEAM) : null, $emailLookup)],
+        );
+    }
+
+    /**
+     * The fake installation of a workspace.
+     */
+    public static function installation(string $team = self::OTHER_TEAM, string $token = self::OTHER_TOKEN, ?string $enterprise = null, ?string $appId = null, ?string $ownSecret = null, ?string $botUserId = null): SlackInstallation
+    {
+        $teamId = SlackTeamId::fromString($team);
+        $ent    = $enterprise !== null ? SlackEnterpriseId::fromString($enterprise) : null;
+
+        return new SlackInstallation(
+            new SlackInstallationKey(SlackInstallationKey::DEFAULT_APP, $teamId, $ent),
+            SlackSecret::botToken($token),
+            $teamId,
+            false,
+            $botUserId,
+            null,
+            $ent,
+            $appId,
+            signingSecret: $ownSecret !== null ? SlackSecret::signingSecret($ownSecret) : null,
         );
     }
 

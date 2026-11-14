@@ -56,3 +56,12 @@ interaction:
     link_required: "Koppel en bevestig eerst je Slack-account (accountprofiel)."
     button_invalid: "Deze knop is niet meer geldig."
     error: "Er ging iets mis. Probeer het later opnieuw."
+install:
+    action:
+        add: "Toevoegen aan Slack"
+    flash:
+        ok: "Slack is geïnstalleerd in %team%."
+        cancelled: "De Slack-installatie is geannuleerd."
+        invalid_state: "De Slack-installatielink is ongeldig of verlopen. Begin opnieuw."
+        failed: "Slack heeft de installatie geweigerd: %error%."
+        refused: "De Slack-installatie is geweigerd: %reason%."

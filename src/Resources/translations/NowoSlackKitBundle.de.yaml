@@ -56,3 +56,12 @@ interaction:
     link_required: "Verknüpfen und bestätigen Sie zuerst Ihr Slack-Konto (Kontoprofil)."
     button_invalid: "Diese Schaltfläche ist nicht mehr gültig."
     error: "Etwas ist schiefgelaufen. Versuchen Sie es später erneut."
+install:
+    action:
+        add: "Zu Slack hinzufügen"
+    flash:
+        ok: "Slack ist in %team% installiert."
+        cancelled: "Die Slack-Installation wurde abgebrochen."
+        invalid_state: "Der Slack-Installationslink ist ungültig oder abgelaufen. Bitte neu starten."
+        failed: "Slack hat die Installation abgelehnt: %error%."
+        refused: "Die Slack-Installation wurde abgelehnt: %reason%."

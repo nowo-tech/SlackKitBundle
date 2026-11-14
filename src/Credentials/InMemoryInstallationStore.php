@@ -11,7 +11,8 @@ use Symfony\Contracts\Service\ResetInterface;
 
 /**
  * Installations kept in memory (tests and demos with fake credentials only). Not for production: nothing survives
- * the process. Lookups without a workspace return the app's first installation.
+ * the process. Lookups without a workspace return the app's first installation; lookups with a workspace return only
+ * that workspace's installation (the enterprise must match when both name one).
  */
 final class InMemoryInstallationStore implements SlackInstallationStoreInterface, ResetInterface
 {
@@ -49,8 +50,9 @@ final class InMemoryInstallationStore implements SlackInstallationStoreInterface
      */
     public function find(SlackInstallationKey $key): ?SlackInstallation
     {
-        if (isset($this->installations[$key->key()])) {
-            return $this->installations[$key->key()];
+        $found = $this->installations[$key->workspaceKey()] ?? null;
+        if ($found instanceof SlackInstallation) {
+            return $key->admits($found) ? $found : null;
         }
         if (!$key->team instanceof SlackTeamId) {
             foreach ($this->installations as $installation) {
@@ -76,13 +78,13 @@ final class InMemoryInstallationStore implements SlackInstallationStoreInterface
      */
     public function save(SlackInstallation $installation): void
     {
-        $key = $installation->teamId instanceof SlackTeamId ? new SlackInstallationKey($installation->key->app, $installation->teamId) : $installation->key;
+        $key = $installation->storageKey();
         if ($installation->teamId instanceof SlackTeamId) {
             // The workspace is now known: the app's workspace-less entry (filled by *Test connection*) is replaced.
             unset($this->installations[$installation->key->app]);
         }
         // @igor-ignore - In-memory store for tests and demos; reset() restores the initial state between requests.
-        $this->installations[$key->key()] = new SlackInstallation($key, $installation->botToken, $installation->teamId, $installation->allowEmailLookup, $installation->botUserId, $installation->revokedAt);
+        $this->installations[$key->workspaceKey()] = $installation->withKey($key);
     }
 
     /**
@@ -94,7 +96,7 @@ final class InMemoryInstallationStore implements SlackInstallationStoreInterface
         if (!$installation instanceof SlackInstallation || $installation->isRevoked()) {
             return;
         }
-        $this->save(new SlackInstallation($installation->key, $installation->botToken, $installation->teamId, $installation->allowEmailLookup, $installation->botUserId, $at));
+        $this->save($installation->revoked($at));
     }
 
     /**

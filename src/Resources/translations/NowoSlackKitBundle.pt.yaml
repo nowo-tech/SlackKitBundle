@@ -56,3 +56,12 @@ interaction:
     link_required: "Primeiro associe e confirme a sua conta do Slack (perfil da conta)."
     button_invalid: "Este botão já não é válido."
     error: "Algo correu mal. Tente mais tarde."
+install:
+    action:
+        add: "Adicionar ao Slack"
+    flash:
+        ok: "O Slack está instalado em %team%."
+        cancelled: "A instalação do Slack foi cancelada."
+        invalid_state: "O link de instalação do Slack é inválido ou expirou. Comece de novo."
+        failed: "O Slack recusou a instalação: %error%."
+        refused: "A instalação do Slack foi recusada: %reason%."

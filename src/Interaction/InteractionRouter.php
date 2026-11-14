@@ -12,6 +12,7 @@ use Nowo\SlackKitBundle\Id\SlackChannelId;
 use Nowo\SlackKitBundle\Id\SlackTeamId;
 use Nowo\SlackKitBundle\Id\SlackUserId;
 use Nowo\SlackKitBundle\NowoSlackKitBundle;
+use Nowo\SlackKitBundle\Security\SlackSecret;
 use Psr\Container\ContainerInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\Log\LoggerInterface;
@@ -88,7 +89,7 @@ final readonly class InteractionRouter
         $user    = SlackUserId::tryFrom($this->path($payload, 'user', 'id'));
         $channel = SlackChannelId::tryFrom($this->path($payload, 'container', 'channel_id') ?? $this->path($payload, 'channel', 'id'));
         $ts      = $this->path($payload, 'container', 'message_ts');
-        $base    = new SlackInteraction($installation, $actionId, [], $team, $user, null, $channel, $ts, '', false, $verifiedByResolver);
+        $base    = new SlackInteraction($installation, $actionId, [], $team, $user, null, $channel, $ts, '', false, $verifiedByResolver, null, SlackSecret::tryResponseUrl($payload['response_url'] ?? null));
 
         $legacy = false;
         if (ButtonValueCodec::isSignedFamily($value)) {
@@ -113,7 +114,21 @@ final readonly class InteractionRouter
 
         $interactionId = hash('sha256', ($team->value ?? '') . '|' . ($ts ?? '') . '|' . (is_string($action['action_ts'] ?? null) ? $action['action_ts'] : '') . '|' . ($user->value ?? ''));
 
-        return [new SlackInteraction($installation, $actionId, $data, $team, $user, $trustActor ? $this->actors->resolve($team, $user) : null, $channel, $ts, $interactionId, $legacy, $verifiedByResolver), null];
+        return [new SlackInteraction(
+            $installation,
+            $actionId,
+            $data,
+            $team,
+            $user,
+            $trustActor ? $this->actors->resolve($team, $user) : null,
+            $channel,
+            $ts,
+            $interactionId,
+            $legacy,
+            $verifiedByResolver,
+            SlackOriginalMessage::fromPayload($payload),
+            SlackSecret::tryResponseUrl($payload['response_url'] ?? null),
+        ), null];
     }
 
     /**

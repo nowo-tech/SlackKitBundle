@@ -25,8 +25,12 @@ final class RecordingApi implements SlackApiClientInterface
 
     public ?SlackUserId $lookup = null;
 
+    /** @var list<string> installation key of every call, in order */
+    public array $keys = [];
+
     public function authTest(SlackInstallationKey $installation): AuthTestResult
     {
+        $this->keys[] = $installation->key();
         $this->record('auth.test', []);
 
         return new AuthTestResult('Fake team', Fake::TEAM, 'fakebot', 'U0000000B', 'B00000000');
@@ -34,6 +38,7 @@ final class RecordingApi implements SlackApiClientInterface
 
     public function openDirectMessage(SlackInstallationKey $installation, SlackUserId $user): SlackChannelId
     {
+        $this->keys[] = $installation->key();
         $this->record('conversations.open', [$user->value]);
 
         return SlackChannelId::fromString(Fake::DM);
@@ -41,6 +46,7 @@ final class RecordingApi implements SlackApiClientInterface
 
     public function postMessage(SlackInstallationKey $installation, SlackChannelId $channel, SlackMessage $message): PostedMessage
     {
+        $this->keys[] = $installation->key();
         $this->record('chat.postMessage', [$channel->value, $message]);
 
         return new PostedMessage($channel->value, '1.000100');
@@ -48,21 +54,25 @@ final class RecordingApi implements SlackApiClientInterface
 
     public function updateMessage(SlackInstallationKey $installation, PostedMessage $target, SlackMessage $message): void
     {
+        $this->keys[] = $installation->key();
         $this->record('chat.update', [$target->channel, $target->ts, $message]);
     }
 
     public function deleteMessage(SlackInstallationKey $installation, PostedMessage $target): void
     {
+        $this->keys[] = $installation->key();
         $this->record('chat.delete', [$target->channel, $target->ts]);
     }
 
     public function postEphemeral(SlackInstallationKey $installation, SlackChannelId $channel, SlackUserId $user, SlackMessage $message): void
     {
+        $this->keys[] = $installation->key();
         $this->record('chat.postEphemeral', [$channel->value, $user->value, $message]);
     }
 
     public function lookupUserByEmail(SlackInstallationKey $installation, string $email): ?SlackUserId
     {
+        $this->keys[] = $installation->key();
         $this->record('users.lookupByEmail', [$email]);
 
         return $this->lookup;

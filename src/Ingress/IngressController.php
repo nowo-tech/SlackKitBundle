@@ -11,6 +11,7 @@ use Nowo\SlackKitBundle\Credentials\SlackInstallationKey;
 use Nowo\SlackKitBundle\Credentials\SlackInstallationStoreInterface;
 use Nowo\SlackKitBundle\Event\SlackEventsRateLimitedEvent;
 use Nowo\SlackKitBundle\Event\SlackInteractionReceivedEvent;
+use Nowo\SlackKitBundle\Id\SlackEnterpriseId;
 use Nowo\SlackKitBundle\Id\SlackTeamId;
 use Nowo\SlackKitBundle\Interaction\InteractionRouter;
 use Nowo\SlackKitBundle\Security\SlackSecret;
@@ -103,7 +104,7 @@ final readonly class IngressController
         if ($verified instanceof Response) {
             return $verified;
         }
-        [$appName, $body, $byResolver, $boundTeam] = $verified;
+        [$appName, $body, $byResolver, $boundTeam, $ownApp] = $verified;
 
         parse_str($body, $fields);
         try {
@@ -122,8 +123,9 @@ final readonly class IngressController
 
         $installation = SlackInstallationKey::default();
         if (!$byResolver) {
-            $team    = is_array($payload['team'] ?? null) ? ($payload['team']['id'] ?? null) : null;
-            $checked = $this->checkWorkspace($appName, $team, $payload['api_app_id'] ?? null);
+            $team       = is_array($payload['team'] ?? null) ? ($payload['team']['id'] ?? null) : null;
+            $enterprise = is_array($payload['enterprise'] ?? null) ? ($payload['enterprise']['id'] ?? null) : null;
+            $checked    = $this->checkWorkspace($appName, $team, $payload['api_app_id'] ?? null, $enterprise, $ownApp);
             if ($checked instanceof Response) {
                 return $checked;
             }
@@ -154,7 +156,7 @@ final readonly class IngressController
         if ($verified instanceof Response) {
             return $verified;
         }
-        [$appName, $body] = $verified;
+        [$appName, $body, , , $ownApp] = $verified;
 
         try {
             $envelope = json_decode($body, true, 32, JSON_THROW_ON_ERROR);
@@ -175,7 +177,7 @@ final readonly class IngressController
                 : $this->text('Invalid challenge', Response::HTTP_BAD_REQUEST);
         }
 
-        $checked = $this->checkWorkspace($appName, $envelope['team_id'] ?? null, $envelope['api_app_id'] ?? null);
+        $checked = $this->checkWorkspace($appName, $envelope['team_id'] ?? null, $envelope['api_app_id'] ?? null, $envelope['enterprise_id'] ?? null, $ownApp);
         if ($checked instanceof Response) {
             return $checked;
         }
@@ -218,10 +220,14 @@ final readonly class IngressController
     }
 
     /**
-     * Steps 1–7 of §5.2.
+     * Steps 1–7 of §5.2. Secrets are tried in this order: the app's, then the own-app secret of the installation named
+     * by the unverified workspace id alone (spec 237 FR-004), then the host resolver's candidates.
      *
-     * @return array{0: string, 1: string, 2: bool, 3: SlackTeamId|null}|Response app, raw body, "verified by a host
-     *                                                                            secret" and its bound workspace, or the refusal
+     * @return array{0: string, 1: string, 2: bool, 3: SlackTeamId|null, 4: bool}|Response app, raw body, "verified by
+     *                                                                                     a host secret" and its bound
+     *                                                                                     workspace, "verified by the
+     *                                                                                     installation's own app", or
+     *                                                                                     the refusal
      */
     private function verify(Request $request, string $contentType, ?string $app, bool $allowResolver): array|Response
     {
@@ -252,9 +258,13 @@ final readonly class IngressController
         $label      = null;
         $byResolver = false;
         $boundTeam  = null;
+        $ownApp     = false;
         $secret     = $this->apps->signingSecret($appName);
         if ($secret instanceof SlackSecret && $this->verifier->matches($secret, $timestamp, $signature, $body)) {
             $label = 'app:' . $appName;
+        } elseif (($own = $this->ownAppSecret($appName, $body, $contentType === 'application/x-www-form-urlencoded')) instanceof SlackSecret && $this->verifier->matches($own, $timestamp, $signature, $body)) {
+            $label  = 'installation';
+            $ownApp = true;
         } elseif ($app === null && $allowResolver && $this->resolver instanceof SigningSecretResolverInterface) {
             $tried = 0;
             foreach ($this->resolver->candidates(new UnverifiedPayloadPeek($body)) as $candidate) {
@@ -277,29 +287,49 @@ final readonly class IngressController
             return $this->unauthorized($appName, 'replay');
         }
 
-        return [$appName, $body, $byResolver, $boundTeam];
+        return [$appName, $body, $byResolver, $boundTeam, $ownApp];
     }
 
     /**
-     * The installation of the payload's workspace for this app, and the app id check.
+     * The own-app signing secret of the active installation named by the body's unverified workspace id (FR-004).
+     * Nothing else of the body is read before the signature passes; the workspace is checked again once verified.
      */
-    private function checkWorkspace(string $app, mixed $teamId, mixed $apiAppId): SlackInstallationKey|Response
+    private function ownAppSecret(string $app, string $body, bool $form): ?SlackSecret
+    {
+        $team = SlackTeamId::tryFrom(UnverifiedPayloadPeek::teamId($body, $form));
+        if (!$team instanceof SlackTeamId) {
+            return null;
+        }
+        $key          = new SlackInstallationKey($app, $team);
+        $installation = $this->store->find($key);
+
+        return $installation instanceof SlackInstallation && !$installation->isRevoked() && $key->admits($installation) ? $installation->signingSecret : null;
+    }
+
+    /**
+     * The installation of the payload's workspace (and enterprise) for this app, and the app id check: the
+     * installation's own Slack app id when it records one, else `apps.<name>.app_id` (not for an own-app request,
+     * whose app is the installation's).
+     */
+    private function checkWorkspace(string $app, mixed $teamId, mixed $apiAppId, mixed $enterpriseId = null, bool $ownApp = false): SlackInstallationKey|Response
     {
         $team         = SlackTeamId::tryFrom($teamId);
-        $installation = $team instanceof SlackTeamId ? $this->store->find(new SlackInstallationKey($app, $team)) : null;
-        if (!$installation instanceof SlackInstallation || $installation->isRevoked() || !$installation->teamId instanceof SlackTeamId || !$installation->teamId->equals($team)) {
+        $key          = $team instanceof SlackTeamId ? new SlackInstallationKey($app, $team, SlackEnterpriseId::tryFrom($enterpriseId)) : null;
+        $installation = $key instanceof SlackInstallationKey ? $this->store->find($key) : null;
+        if (!$key instanceof SlackInstallationKey || !$installation instanceof SlackInstallation || $installation->isRevoked() || !$installation->teamId instanceof SlackTeamId || !$key->admits($installation)
+            || ($ownApp && !$installation->signingSecret instanceof SlackSecret)) {
             $this->logger->warning('Slack request refused: workspace not installed.', ['app' => $app, 'reason' => 'team']);
 
             return $this->text('Workspace mismatch', Response::HTTP_FORBIDDEN);
         }
-        $appId = $this->apps->appId($app);
+        $appId = $installation->appId ?? ($ownApp ? null : $this->apps->appId($app));
         if ($appId !== null && $apiAppId !== $appId) {
             $this->logger->warning('Slack request refused: app mismatch.', ['app' => $app, 'reason' => 'app_id']);
 
             return $this->text('App mismatch', Response::HTTP_FORBIDDEN);
         }
 
-        return new SlackInstallationKey($app, $team);
+        return $key;
     }
 
     private function unauthorized(?string $app, string $reason): Response

@@ -9,13 +9,19 @@ use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
 use Nowo\DoctrineEncryptBundle\NowoDoctrineEncryptBundle;
 use Nowo\FormKitBundle\NowoFormKitBundle;
 use Nowo\InstanceSettingsBundle\NowoInstanceSettingsBundle;
+use Nowo\SlackKitBundle\DependencyInjection\NowoSlackKitExtension;
 use Nowo\SlackKitBundle\NowoSlackKitBundle;
 use Nowo\UiKitBundle\NowoUiKitBundle;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
 use Symfony\Bundle\SecurityBundle\SecurityBundle;
 use Symfony\Bundle\TwigBundle\TwigBundle;
+use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+use Symfony\Component\DependencyInjection\Reference;
+use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpKernel\Kernel;
 use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
 use Twig\Extra\TwigExtraBundle\TwigExtraBundle;
@@ -57,6 +63,22 @@ final class SlackKitTestKernel extends Kernel
         yield new NowoUiKitBundle();
         yield new NowoInstanceSettingsBundle();
         yield new NowoSlackKitBundle();
+    }
+
+    /**
+     * The logger-free client of webhooks, response URLs and OAuth also answers from the fake Slack API: the tests
+     * never reach the network.
+     */
+    protected function build(ContainerBuilder $container): void
+    {
+        $container->addCompilerPass(new class implements CompilerPassInterface {
+            public function process(ContainerBuilder $container): void
+            {
+                if ($container->hasDefinition(NowoSlackKitExtension::WEBHOOK_HTTP_CLIENT)) {
+                    $container->setDefinition(NowoSlackKitExtension::WEBHOOK_HTTP_CLIENT, new Definition(MockHttpClient::class, [new Reference('test.fake_slack_api')]));
+                }
+            }
+        });
     }
 
     public function getProjectDir(): string

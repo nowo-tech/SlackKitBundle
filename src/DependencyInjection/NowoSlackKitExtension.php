@@ -14,14 +14,18 @@ use Nowo\InstanceSettingsBundle\Settings\InstanceSettingsInterface;
 use Nowo\SlackKitBundle\Api\ApiPolicy;
 use Nowo\SlackKitBundle\Api\ClientMemory;
 use Nowo\SlackKitBundle\Api\IncomingWebhookClient;
+use Nowo\SlackKitBundle\Api\ResponseUrlClient;
+use Nowo\SlackKitBundle\Api\ResponseUrlClientInterface;
 use Nowo\SlackKitBundle\Api\SlackApiClient;
 use Nowo\SlackKitBundle\Api\SlackApiClientInterface;
 use Nowo\SlackKitBundle\Controller\AccountLinkController;
 use Nowo\SlackKitBundle\Controller\TestConnectionController;
+use Nowo\SlackKitBundle\Credentials\InMemoryInstallationBindingStore;
 use Nowo\SlackKitBundle\Credentials\InMemoryInstallationStore;
 use Nowo\SlackKitBundle\Credentials\InMemoryInstallationStoreBoundaryListener;
 use Nowo\SlackKitBundle\Credentials\InstanceSettingsInstallationStore;
 use Nowo\SlackKitBundle\Credentials\SlackAppRegistry;
+use Nowo\SlackKitBundle\Credentials\SlackInstallationBindingStoreInterface;
 use Nowo\SlackKitBundle\Credentials\SlackInstallationKey;
 use Nowo\SlackKitBundle\Credentials\SlackInstallationStoreInterface;
 use Nowo\SlackKitBundle\Ingress\EventsHandler;
@@ -29,6 +33,11 @@ use Nowo\SlackKitBundle\Ingress\HandleSlackEvent;
 use Nowo\SlackKitBundle\Ingress\IngressController;
 use Nowo\SlackKitBundle\Ingress\ReplayGuard;
 use Nowo\SlackKitBundle\Ingress\SignatureVerifier;
+use Nowo\SlackKitBundle\Install\InstallController;
+use Nowo\SlackKitBundle\Install\InstallStateStore;
+use Nowo\SlackKitBundle\Install\SlackInstallAuthorizerInterface;
+use Nowo\SlackKitBundle\Install\SlackOAuthClient;
+use Nowo\SlackKitBundle\Install\SlackOAuthClientInterface;
 use Nowo\SlackKitBundle\Interaction\ActorResolver;
 use Nowo\SlackKitBundle\Interaction\AsSlackActionHandler;
 use Nowo\SlackKitBundle\Interaction\ButtonValueCodec;
@@ -129,7 +138,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
      */
     public function load(array $configs, ContainerBuilder $container): void
     {
-        /** @var array{default_locale: string, api: array{timeout: float, max_duration: float, max_response_bytes: int}, default_app: string, apps: array<string, array{app_id: string|null, signing_secret: string|null}>, credentials: array{store: string, settings_section: string}, ingress: array{enabled: bool, prefix: string, interactions_path: string|null, events_path: string|null, events_enabled: bool, max_body_bytes: int, max_skew_seconds: int, replay_lock_factory: string, max_secret_candidates: int, signing_secret_resolver: string|null, resolver_actors: bool, async: bool, transport: string}, interactions: array{value_ttl: string, previous_secrets: list<string>, legacy_value_key: string|null, legacy_action_map: array<string, string>, legacy_until: string|null}, linking: array{enabled: bool, identity_store: string|null, account_resolver: string|null, claim_ttl: string, confirmation_ttl: string, email_lookup: bool, return_route: string|null, rate_limiter_cache_pool: string, claim_per_account: array{limit: int, interval: string}, email_lookup_per_account: array{limit: int, interval: string}, confirmation_per_account: array{limit: int, interval: string}, confirmation_per_target: array{limit: int, interval: string}}, test_connection: array{enabled: bool, rate_limit: array{limit: int, interval: string}}, rate_limit: array{max_retry_after: int, max_attempts: int}, notifier: array{enabled: bool}, ui: array{prefix: string}} $config */
+        /** @var array{default_locale: string, api: array{timeout: float, max_duration: float, max_response_bytes: int}, default_app: string, apps: array<string, array{app_id: string|null, signing_secret: string|null, client_id: string|null, client_secret: string|null}>, credentials: array{store: string, settings_section: string}, installations: array{binding_store: string|null, oauth: array{enabled: bool, authorizer: string|null, account_resolver: string|null, scopes: list<string>, optional_scopes: list<string>, state_ttl: int, return_route: string|null}}, ingress: array{enabled: bool, prefix: string, interactions_path: string|null, events_path: string|null, events_enabled: bool, max_body_bytes: int, max_skew_seconds: int, replay_lock_factory: string, max_secret_candidates: int, signing_secret_resolver: string|null, resolver_actors: bool, async: bool, transport: string}, interactions: array{value_ttl: string, previous_secrets: list<string>, legacy_value_key: string|null, legacy_action_map: array<string, string>, legacy_until: string|null}, linking: array{enabled: bool, identity_store: string|null, account_resolver: string|null, claim_ttl: string, confirmation_ttl: string, email_lookup: bool, return_route: string|null, rate_limiter_cache_pool: string, claim_per_account: array{limit: int, interval: string}, email_lookup_per_account: array{limit: int, interval: string}, confirmation_per_account: array{limit: int, interval: string}, confirmation_per_target: array{limit: int, interval: string}}, test_connection: array{enabled: bool, rate_limit: array{limit: int, interval: string}}, rate_limit: array{max_retry_after: int, max_attempts: int}, notifier: array{enabled: bool}, ui: array{prefix: string}} $config */
         $config = $this->processConfiguration(new Configuration(), $configs);
         $this->assertLiteralBooleans($config);
         $this->assertSecretsFromEnvironment($container, $config);
@@ -143,10 +152,13 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
         $container->registerForAutoconfiguration(SlackSettingsNoticeProviderInterface::class)->addTag(NowoSlackKitBundle::NOTICE_TAG);
 
         $instanceSettings = $this->registerStore($container, $config['credentials'], $config['default_app']);
+        $bindings         = $this->registerBindings($container, $config['installations']['binding_store']);
+        $this->registerBoundaries($container);
         $this->registerClient($container, $config);
         $this->registerInteractions($container, $config);
-        $ingress = $this->registerIngress($container, $config);
+        $ingress = $this->registerIngress($container, $config, $bindings);
         $this->registerLinking($container, $config);
+        $install        = $this->registerInstall($container, $config, $instanceSettings, $bindings);
         $testConnection = $instanceSettings && $config['test_connection']['enabled'];
         $this->registerSettings($container, $config, $instanceSettings, $testConnection, $ingress['enabled'] ? IngressController::INTERACTIONS_ROUTE : null);
 
@@ -155,6 +167,8 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
             $config['ui']['prefix'],
             $testConnection,
             $config['linking']['enabled'],
+            null,
+            $install !== null,
         ]))->addTag('routing.loader'));
 
         $container->setDefinition(SlackKitTwigExtension::class, (new Definition(SlackKitTwigExtension::class, [
@@ -163,6 +177,9 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
             $config['linking']['enabled'] ? new Reference((string) $config['linking']['account_resolver']) : null,
             new Reference('form.factory', ContainerInterface::NULL_ON_INVALID_REFERENCE),
             new Reference(CsrfOnlyFormFactory::class, ContainerInterface::NULL_ON_INVALID_REFERENCE),
+            $install !== null ? new Reference(SlackAppRegistry::class) : null,
+            $install !== null ? new Reference($install['authorizer']) : null,
+            $install !== null ? new Reference($install['account_resolver']) : null,
         ]))->addTag('twig.extension'));
 
         if ($config['notifier']['enabled']) {
@@ -200,16 +217,8 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
         }
         if ($store === 'memory') {
             // Tests and demos only: installations live in the worker's memory and are restored at every boundary.
-            if ($container->hasParameter('kernel.debug') && $container->getParameter('kernel.debug') === false
-                && $container->hasParameter('kernel.environment') && $container->getParameter('kernel.environment') !== 'test') {
-                throw new LogicException('NowoSlackKitBundle: credentials.store: memory is for tests and demos only, never in production (refused outside kernel.debug and the test env). Use instance_settings or your own SlackInstallationStoreInterface service.');
-            }
+            $this->assertTestOnly($container, 'credentials.store: memory');
             $container->setDefinition(InMemoryInstallationStore::class, (new Definition(InMemoryInstallationStore::class))->addTag('kernel.reset', ['method' => 'reset']));
-            // REQ-RUNTIME-002: back to the initial state at the request / message / console boundaries too. A lazy
-            // iterator of an IGNORE_ON_UNINITIALIZED reference: a boundary never builds the store.
-            $container->setDefinition(InMemoryInstallationStoreBoundaryListener::class, (new Definition(InMemoryInstallationStoreBoundaryListener::class, [
-                new IteratorArgument([new Reference(InMemoryInstallationStore::class, ContainerInterface::IGNORE_ON_UNINITIALIZED_REFERENCE)]),
-            ]))->addTag('kernel.event_subscriber'));
             $container->setAlias(SlackInstallationStoreInterface::class, InMemoryInstallationStore::class)->setPublic(true);
 
             return false;
@@ -217,6 +226,119 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
         $container->setAlias(SlackInstallationStoreInterface::class, $store)->setPublic(true);
 
         return false;
+    }
+
+    /**
+     * Refuses an in-memory store outside kernel.debug and the test env.
+     */
+    private function assertTestOnly(ContainerBuilder $container, string $what): void
+    {
+        if ($container->hasParameter('kernel.debug') && $container->getParameter('kernel.debug') === false
+            && $container->hasParameter('kernel.environment') && $container->getParameter('kernel.environment') !== 'test') {
+            throw new LogicException(sprintf('NowoSlackKitBundle: %s is for tests and demos only, never in production (refused outside kernel.debug and the test env). Use your own store service.', $what));
+        }
+    }
+
+    /**
+     * `installations.binding_store`: null, `memory` (tests and demos) or a service id.
+     *
+     * @return bool whether a binding store is registered
+     */
+    private function registerBindings(ContainerBuilder $container, ?string $store): bool
+    {
+        if ($store === null) {
+            return false;
+        }
+        if ($store === 'memory') {
+            $this->assertTestOnly($container, 'installations.binding_store: memory');
+            $container->setDefinition(InMemoryInstallationBindingStore::class, (new Definition(InMemoryInstallationBindingStore::class))->addTag('kernel.reset', ['method' => 'reset']));
+            $container->setAlias(SlackInstallationBindingStoreInterface::class, InMemoryInstallationBindingStore::class)->setPublic(true);
+
+            return true;
+        }
+        $container->setAlias(SlackInstallationBindingStoreInterface::class, $store)->setPublic(true);
+
+        return true;
+    }
+
+    /**
+     * REQ-RUNTIME-002: the in-memory stores go back to their initial state at the request / message / console
+     * boundaries too. A lazy iterator of IGNORE_ON_UNINITIALIZED references: a boundary never builds a store.
+     */
+    private function registerBoundaries(ContainerBuilder $container): void
+    {
+        $stores = [];
+        foreach ([InMemoryInstallationStore::class, InMemoryInstallationBindingStore::class] as $id) {
+            if ($container->hasDefinition($id)) {
+                $stores[] = new Reference($id, ContainerInterface::IGNORE_ON_UNINITIALIZED_REFERENCE);
+            }
+        }
+        if ($stores === []) {
+            return;
+        }
+        $container->setDefinition(InMemoryInstallationStoreBoundaryListener::class, (new Definition(InMemoryInstallationStoreBoundaryListener::class, [
+            new IteratorArgument($stores),
+        ]))->addTag('kernel.event_subscriber'));
+    }
+
+    /**
+     * "Add to Slack" (`installations.oauth`).
+     *
+     * @param array<string, mixed> $config
+     *
+     * @return array{authorizer: string, account_resolver: string}|null the authoriser and account resolver ids, or
+     *                                                                  null when the flow is off
+     */
+    private function registerInstall(ContainerBuilder $container, array $config, bool $instanceSettings, bool $bindings): ?array
+    {
+        /** @var array{default_app: string, linking: array{account_resolver: string|null}, ingress: array{replay_lock_factory: string}, installations: array{oauth: array{enabled: bool, authorizer: string|null, account_resolver: string|null, scopes: list<string>, optional_scopes: list<string>, state_ttl: int, return_route: string|null}}} $config */
+        $oauth = $config['installations']['oauth'];
+        if (!$oauth['enabled']) {
+            return null;
+        }
+        $accounts = $oauth['account_resolver'] ?? $config['linking']['account_resolver'];
+        if ($instanceSettings) {
+            throw new InvalidConfigurationException('nowo_slack_kit.installations.oauth needs a credentials.store that keeps several installations (your SlackInstallationStoreInterface service); the instance_settings store holds one.');
+        }
+        if (!$bindings) {
+            throw new InvalidConfigurationException('nowo_slack_kit.installations.oauth needs installations.binding_store.');
+        }
+        if (!is_string($oauth['authorizer']) || !is_string($accounts)) {
+            throw new InvalidConfigurationException('nowo_slack_kit.installations.oauth needs installations.oauth.authorizer (SlackInstallAuthorizerInterface) and an account resolver (installations.oauth.account_resolver or linking.account_resolver).');
+        }
+        if ($oauth['scopes'] === []) {
+            throw new InvalidConfigurationException('nowo_slack_kit.installations.oauth.scopes cannot be empty.');
+        }
+
+        $container->setAlias(SlackInstallAuthorizerInterface::class, $oauth['authorizer']);
+        $container->setDefinition(SlackOAuthClient::class, new Definition(SlackOAuthClient::class, [new Reference(self::WEBHOOK_HTTP_CLIENT), new Reference(ApiPolicy::class)]));
+        $container->setAlias(SlackOAuthClientInterface::class, SlackOAuthClient::class);
+        $container->setDefinition(InstallStateStore::class, new Definition(InstallStateStore::class, [
+            (new Definition(SlackSecret::class))->setFactory([InstallStateStore::class, 'deriveKey'])->setArguments(['%kernel.secret%']),
+            new Reference($config['ingress']['replay_lock_factory']),
+            new Reference('clock'),
+            $oauth['state_ttl'],
+        ]));
+        $container->setDefinition(InstallController::class, (new Definition(InstallController::class, [
+            new Reference(SlackAppRegistry::class),
+            new Reference($oauth['authorizer']),
+            new Reference($accounts),
+            new Reference(InstallStateStore::class),
+            new Reference(SlackOAuthClientInterface::class),
+            new Reference(SlackInstallationStoreInterface::class),
+            new Reference(SlackInstallationBindingStoreInterface::class),
+            new Reference(CsrfOnlyFormFactory::class),
+            new Reference('router'),
+            new Reference('clock'),
+            array_values($oauth['scopes']),
+            array_values($oauth['optional_scopes']),
+            $oauth['return_route'],
+            new Reference('event_dispatcher', ContainerInterface::NULL_ON_INVALID_REFERENCE),
+            new Reference('translator', ContainerInterface::NULL_ON_INVALID_REFERENCE),
+            new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE),
+        ]))->setAutoconfigured(false)->setPublic(true)->addTag('controller.service_arguments')->addTag('monolog.logger', ['channel' => 'slack']));
+
+        return ['authorizer' => $oauth['authorizer'], 'account_resolver' => $accounts];
     }
 
     /**
@@ -253,6 +375,12 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
             new Reference(self::WEBHOOK_HTTP_CLIENT),
             new Reference(ApiPolicy::class),
         ]))->setPublic(true));
+        // Spec 237 T000c: the response_url is a credential too (same logger-free client).
+        $container->setDefinition(ResponseUrlClient::class, new Definition(ResponseUrlClient::class, [
+            new Reference(self::WEBHOOK_HTTP_CLIENT),
+            new Reference(ApiPolicy::class),
+        ]));
+        $container->setAlias(ResponseUrlClientInterface::class, ResponseUrlClient::class)->setPublic(true);
     }
 
     /**
@@ -308,6 +436,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
         $container->setDefinition(ReplyDispatcher::class, (new Definition(ReplyDispatcher::class, [
             new Reference(SlackApiClientInterface::class),
             new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE),
+            new Reference(ResponseUrlClientInterface::class),
         ]))
             ->addTag('monolog.logger', ['channel' => 'slack'])
             ->addTag('kernel.reset', ['method' => 'reset'])
@@ -332,7 +461,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
      *
      * @return array{enabled: bool, interactions: string, events: string|null}
      */
-    private function registerIngress(ContainerBuilder $container, array $config): array
+    private function registerIngress(ContainerBuilder $container, array $config, bool $bindings = false): array
     {
         /** @var array{ingress: array{enabled: bool, prefix: string, interactions_path: string|null, events_path: string|null, events_enabled: bool, max_body_bytes: int, max_skew_seconds: int, replay_lock_factory: string, max_secret_candidates: int, signing_secret_resolver: string|null, resolver_actors: bool, async: bool, transport: string}} $config */
         $ingress = $config['ingress'];
@@ -355,6 +484,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
             new Reference(SlackInstallationStoreInterface::class),
             new Reference('event_dispatcher'),
             new Reference('clock'),
+            $bindings ? new Reference(SlackInstallationBindingStoreInterface::class) : null,
         ]));
         if ($ingress['async']) {
             $events->addTag('messenger.message_handler', ['handles' => HandleSlackEvent::class]);
@@ -505,13 +635,14 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
     {
         /** @var array<string, array<string, mixed>> $config */
         $switches = [
-            'ingress.enabled'         => $config['ingress']['enabled'] ?? null,
-            'ingress.events_enabled'  => $config['ingress']['events_enabled'] ?? null,
-            'ingress.async'           => $config['ingress']['async'] ?? null,
-            'linking.enabled'         => $config['linking']['enabled'] ?? null,
-            'linking.email_lookup'    => $config['linking']['email_lookup'] ?? null,
-            'test_connection.enabled' => $config['test_connection']['enabled'] ?? null,
-            'notifier.enabled'        => $config['notifier']['enabled'] ?? null,
+            'ingress.enabled'             => $config['ingress']['enabled'] ?? null,
+            'ingress.events_enabled'      => $config['ingress']['events_enabled'] ?? null,
+            'ingress.async'               => $config['ingress']['async'] ?? null,
+            'linking.enabled'             => $config['linking']['enabled'] ?? null,
+            'linking.email_lookup'        => $config['linking']['email_lookup'] ?? null,
+            'test_connection.enabled'     => $config['test_connection']['enabled'] ?? null,
+            'notifier.enabled'            => $config['notifier']['enabled'] ?? null,
+            'installations.oauth.enabled' => $config['installations']['oauth']['enabled'] ?? null,
         ];
         foreach ($switches as $path => $value) {
             if (!is_bool($value)) {
@@ -527,10 +658,11 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
      */
     private function assertSecretsFromEnvironment(ContainerBuilder $container, array $config): void
     {
-        /** @var array{apps: array<string, array{signing_secret: string|null}>, interactions: array{previous_secrets: list<string>}} $config */
+        /** @var array{apps: array<string, array{signing_secret: string|null, client_secret?: string|null}>, interactions: array{previous_secrets: list<string>}} $config */
         $values = [];
         foreach ($config['apps'] as $name => $app) {
             $values['apps.' . $name . '.signing_secret'] = $app['signing_secret'];
+            $values['apps.' . $name . '.client_secret']  = $app['client_secret'] ?? null;
         }
         foreach ($config['interactions']['previous_secrets'] as $i => $secret) {
             $values['interactions.previous_secrets.' . $i] = $secret;
