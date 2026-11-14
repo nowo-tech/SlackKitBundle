@@ -48,15 +48,16 @@ final readonly class EventsHandler
      */
     public function __invoke(HandleSlackEvent $message): void
     {
-        $this->handle($message->app, $message->envelope);
+        $this->handle($message->app, $message->envelope, $message->verifiedByOwnApp);
     }
 
     /**
      * Handles one envelope (already verified, de-duplicated and validated by the ingress).
      *
      * @param array<string, mixed> $envelope
+     * @param bool $verifiedByOwnApp the callback was verified with an installation's own-app secret (audit PZ-L7)
      */
-    public function handle(string $app, array $envelope): void
+    public function handle(string $app, array $envelope, bool $verifiedByOwnApp = false): void
     {
         $event = is_array($envelope['event'] ?? null) ? $envelope['event'] : [];
         $type  = is_string($event['type'] ?? null) ? $event['type'] : '';
@@ -74,6 +75,7 @@ final readonly class EventsHandler
             is_int($envelope['event_time'] ?? null) ? $envelope['event_time'] : 0,
             $type,
             $event,
+            $verifiedByOwnApp,
         ));
     }
 

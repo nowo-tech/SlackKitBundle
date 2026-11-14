@@ -91,6 +91,9 @@ follows in 1.4.0).
   API client double-checks the store's answer, button values stay bound to their workspace, actors resolve only from a
   link of the click's workspace, and replies use the click's own installation. Covered by unit tests and a FrankenPHP
   worker test (one kernel, no resetter, two workspaces alternating).
+- Own-app clicks never accept legacy unsigned button values (audit PZ-M2); `installations.own_app_actors: true`
+  fails the build without `installations.actor_filter` (PZ-L6); `SlackEventReceivedEvent::$verifiedByOwnApp` and
+  `HandleSlackEvent::$verifiedByOwnApp` flag own-app-signed Events API callbacks (PZ-L7).
 - An own-app installation without its Slack app id is never tried, and an own-app request must carry that app id
   (PZ-L5); one HMAC runs whether or not a workspace has an own-app secret (PZ-L4).
 - The OAuth code, state, client secret and tokens never reach a log, an exception message or the session in clear

@@ -67,6 +67,7 @@ final readonly class InteractionRouter
      *
      * @param array<string, mixed> $payload verified `block_actions` payload
      * @param bool $verifiedByResolver the request was verified with a host-resolved secret: legacy values are refused
+     *                                 (also for own-app clicks)
      * @param bool $trustActor whether `team.id` / `user.id` may resolve an actor (false for resolver-verified clicks,
      *                         audit FS-M1, and for own-app clicks unless `installations.own_app_actors`, PZ-M1)
      * @param bool $verifiedByOwnApp the request was verified with the installation's own-app secret
@@ -102,7 +103,8 @@ final readonly class InteractionRouter
                 return [null, $this->refuse($base, 'interaction.button_invalid', 'Button no longer valid', null)];
             }
         } else {
-            $resolved = $verifiedByResolver ? null : $this->legacy->resolve($value);
+            // FS-M1 / PZ-M2: whoever holds a host or own-app secret could choose an unsigned value's action and data.
+            $resolved = $verifiedByResolver || $verifiedByOwnApp ? null : $this->legacy->resolve($value);
             if ($resolved === null) {
                 $this->logger->info('Slack button value refused.', ['reason' => 'unsigned']);
 

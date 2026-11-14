@@ -49,8 +49,9 @@ Behaviour changes to check:
   `workspaceKey()`, not with the `key()` string.
 - `new SlackInstallationKey($app, null, $enterprise)` (an enterprise without a workspace) throws
   `InvalidArgumentException`.
-- Own-app installations (new in 1.3) need their Slack `appId`, and their clicks get no actor unless
-  `installations.own_app_actors: true` (see USAGE "Own apps").
+- Own-app installations (new in 1.3) need their Slack `appId`; their clicks get no actor unless
+  `installations.own_app_actors: true`, which requires `installations.actor_filter`, and never accept legacy unsigned
+  values (see USAGE "Own apps").
 
 ### Several workspaces
 

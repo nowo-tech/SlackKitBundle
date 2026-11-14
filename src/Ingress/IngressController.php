@@ -210,9 +210,9 @@ final readonly class IngressController
 
         try {
             if ($this->bus instanceof MessageBusInterface) {
-                $this->bus->dispatch(new HandleSlackEvent($appName, $envelope), [new TransportNamesStamp([$this->transport])]);
+                $this->bus->dispatch(new HandleSlackEvent($appName, $envelope, $ownApp), [new TransportNamesStamp([$this->transport])]);
             } else {
-                $this->events->handle($appName, $envelope);
+                $this->events->handle($appName, $envelope, $ownApp);
             }
         } catch (Throwable $e) {
             // Audit FS-I5: forget the event so Slack's retry (same event_id) is handled.

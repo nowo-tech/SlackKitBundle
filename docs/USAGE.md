@@ -251,7 +251,8 @@ such secret to act as any linked member of that workspace; enable it only when t
 operators alone. The bound team must come from a **host-verified** source (`auth.test` with the destination's own bot
 token, OAuth, or an operator) and never from a value the secret holder typed or chose; otherwise that person picks the
 workspace and can act as its members. The opt-in only restores the actor: legacy unsigned values and link
-confirmations stay refused on resolver-verified clicks.
+confirmations stay refused on resolver-verified clicks. Own-app clicks (1.3) never accept legacy unsigned values
+either.
 
 ## Events API
 
@@ -543,14 +544,17 @@ A workspace whose policy forbids third-party apps can use its own Slack app: sto
 token, its own `signingSecret` **and** its Slack `appId` (required: an own-app installation without it is never
 tried; read it with `bots.info` for the `bot_id` that `auth.test` returns). A click or event that the configured app's
 secret does not verify is tried with the own-app secret of the installation named by the request's workspace id, and
-then must carry that installation's `api_app_id`. Handlers see `$interaction->verifiedByOwnApp` (and listeners
-`SlackInteractionReceivedEvent::$verifiedByOwnApp`).
+then must carry that installation's `api_app_id`. Handlers see `$interaction->verifiedByOwnApp`, listeners
+`SlackInteractionReceivedEvent::$verifiedByOwnApp` and, for Events API callbacks, `SlackEventReceivedEvent::$verifiedByOwnApp`
+(also on the Messenger message `HandleSlackEvent`). Legacy unsigned button values are always refused on own-app
+clicks. **Never build an actor from the raw payload** (`SlackInteractionReceivedEvent::$payload`, `event.user` of an
+event): its member id may have been chosen by whoever holds the secret; the only actor is `$interaction->actor`.
 
 **Actors are off for own-app clicks by default.** The own-app signing secret is not held by Slack alone: whoever
 pasted it (a tenant admin) can sign a click with **any member id** of that workspace, including members linked to
 other tenants' accounts. So, like resolver-verified clicks, own-app clicks get no actor: handlers that need one refuse
 them, anonymous-safe handlers (`requiresActor: false`) still run, Web API answers work. Turn
-`installations.own_app_actors: true` on only together with an `installations.actor_filter`
+`installations.own_app_actors: true` on only together with an `installations.actor_filter` (the build fails without one)
 (`SlackActorFilterInterface`): it gets a `SlackActorCandidate` (account id, team, member, installation key,
 `verifiedByOwnApp`) for every verified, active link and can limit own-app clicks to the accounts of the owner scopes
 bound to that installation:

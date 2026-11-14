@@ -388,7 +388,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
      */
     private function registerInteractions(ContainerBuilder $container, array $config): void
     {
-        /** @var array{default_locale: string, interactions: array{value_ttl: string, previous_secrets: list<string>, legacy_value_key: string|null, legacy_action_map: array<string, string>, legacy_until: string|null}, linking: array{enabled: bool, identity_store: string|null}, installations: array{actor_filter: string|null}} $config */
+        /** @var array{default_locale: string, interactions: array{value_ttl: string, previous_secrets: list<string>, legacy_value_key: string|null, legacy_action_map: array<string, string>, legacy_until: string|null}, linking: array{enabled: bool, identity_store: string|null}, installations: array{actor_filter: string|null, own_app_actors: bool}} $config */
         $interactions = $config['interactions'];
         $container->setDefinition(self::BUTTON_KEY, (new Definition())->setClass(SlackSecret::class)->setFactory([ButtonValueCodec::class, 'deriveCheckedKey'])->setArguments(['%kernel.secret%', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE)]));
         $previous = [];
@@ -433,6 +433,10 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
 
         $identities = $config['linking']['enabled'] && is_string($config['linking']['identity_store']) ? new Reference($config['linking']['identity_store']) : null;
         $filter     = $config['installations']['actor_filter'];
+        if ($config['installations']['own_app_actors'] && !is_string($filter)) {
+            // Audit PZ-L6: without a filter, whoever holds an own-app secret could act as any linked member.
+            throw new InvalidConfigurationException('nowo_slack_kit.installations.own_app_actors needs installations.actor_filter (SlackActorFilterInterface): whoever holds an own-app signing secret can sign clicks as any member of that workspace, so limit actors to the accounts of the scopes bound to the installation.');
+        }
         $container->setDefinition(ActorResolver::class, new Definition(ActorResolver::class, [$identities, is_string($filter) ? new Reference($filter) : null]));
         $container->setDefinition(ReplyDispatcher::class, (new Definition(ReplyDispatcher::class, [
             new Reference(SlackApiClientInterface::class),

@@ -119,6 +119,7 @@ final class InstallationsWiringTest extends TestCase
         yield 'no account resolver' => [['installations' => ['oauth' => ['enabled' => true, 'authorizer' => 'app.authorizer']] + $oauth['installations']] + $oauth, InvalidConfigurationException::class];
         yield 'empty scopes' => [['installations' => ['oauth' => ['scopes' => []] + $oauth['installations']['oauth']] + $oauth['installations']] + $oauth, InvalidConfigurationException::class];
         yield 'literal client secret' => [['apps' => ['default' => ['client_secret' => 'literalclientsecretliteral000000']]], InvalidConfigurationException::class];
+        yield 'own-app actors without a filter (PZ-L6)' => [['installations' => ['own_app_actors' => true]], InvalidConfigurationException::class];
         yield 'own-app actors env switch' => [['installations' => ['own_app_actors' => '%env(bool:SLACK_OWN_APP_ACTORS)%']], InvalidConfigurationException::class];
         yield 'env switch' => [['installations' => ['oauth' => ['enabled' => '%env(bool:SLACK_OAUTH)%']]], InvalidConfigurationException::class];
         yield 'bad scope' => [['installations' => ['oauth' => ['scopes' => ['Chat Write']]]], InvalidConfigurationException::class];

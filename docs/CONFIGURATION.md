@@ -48,7 +48,7 @@ nowo_slack_kit:
 
     installations:                    # several workspaces (1.3, spec 237)
         binding_store: null           # service id implementing SlackInstallationBindingStoreInterface | memory (tests / demos only)
-        own_app_actors: false         # actors for own-app-verified clicks (literal boolean); the secret holder can act as any linked member: pair with actor_filter
+        own_app_actors: false         # actors for own-app-verified clicks (literal boolean); the secret holder can act as any linked member: requires actor_filter
         actor_filter: null            # service id implementing SlackActorFilterInterface (last word on who may act on an installation)
         oauth:
             enabled: false            # "Add to Slack" routes under ui.prefix/install (literal boolean)
@@ -151,7 +151,7 @@ to the accounts of the scopes bound to the installation ([SECURITY.md](SECURITY.
 `instance_settings`), `binding_store`, `oauth.authorizer`, an account resolver, a non-empty `scopes` list, and for
 each app offered: `app_id`, `client_id` and `client_secret`. The single-use state uses `ingress.replay_lock_factory`
 and the session. Build-time refusals: `oauth` with the `instance_settings` store or without `binding_store`,
-authoriser or account resolver; empty `scopes`; a literal `client_secret`; `oauth.enabled` or `own_app_actors` as an env placeholder;
+authoriser or account resolver; empty `scopes`; a literal `client_secret`; `oauth.enabled` or `own_app_actors` as an env placeholder; `own_app_actors: true` without `actor_filter`;
 `binding_store: memory` outside debug and test.
 
 ## ingress
@@ -307,7 +307,7 @@ always signed with the current key. Remove the entry after `value_ttl`.
 ### Legacy unsigned values: legacy_value_key, legacy_action_map, legacy_until
 
 For buttons posted by an in-app integration **before** it signed its values (plain JSON such as
-`{"a":"resolve","p":"…"}`):
+`{"a":"resolve","p":"…"}`). Never accepted on resolver-verified or own-app clicks:
 
 ```yaml
 nowo_slack_kit:

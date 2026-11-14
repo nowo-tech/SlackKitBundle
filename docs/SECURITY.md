@@ -67,7 +67,8 @@ Until then the code on `main` is a release candidate.
 8. Workspace and app id, else 403. Skipped for resolver-verified clicks, which therefore get **no actor** (unless
    `ingress.resolver_actors` and a workspace-bound `ResolvedSigningSecret` matching the click's `team.id`). Legacy
    unsigned values and link confirmations are **always** refused on resolver-verified clicks, with or without the
-   opt-in: the opt-in only restores the actor.
+   opt-in: the opt-in only restores the actor. Legacy unsigned values are refused on own-app clicks too (1.3, audit
+   PZ-M2), whatever `installations.own_app_actors` says.
 9. Routing; button value verification (§ below), else 403.
 
 Events API: the `event_id` is claimed after the workspace check; when handling fails the claim is released and the
@@ -153,6 +154,7 @@ bot token.
 | Grant for another app, org-wide install, rotating token, missing scope | Refused before anything is saved (`app_mismatch`, `enterprise_install`, `token_rotation_unsupported`, `missing_scope`, `invalid_grant`); a user token in the answer is never kept |
 | Own-app secret speaks for another workspace | The own-app secret is chosen by the unverified workspace id only and verifies the whole body; the verified payload must then name that same workspace and carry the installation's `api_app_id` (required: an own-app installation without `appId` is never tried) |
 | Own-app secret holder acts as any linked member of the workspace (audit PZ-M1) | The secret is pasted by a tenant admin, so its holder can sign any `user.id`. Own-app clicks resolve **no actor** unless `installations.own_app_actors: true` (off by default, like `ingress.resolver_actors`, FS-M1); `SlackInteraction::$verifiedByOwnApp` and `SlackInteractionReceivedEvent::$verifiedByOwnApp` tell handlers and listeners; with the switch on, `installations.actor_filter` sees the installation key and the trust source and should limit actors to accounts of the scopes bound to that installation |
+| Own-app holder forges legacy values or user events (PZ-M2, PZ-L7) | Legacy unsigned button values are never accepted on own-app clicks (the holder would choose the action and its data); Events API callbacks signed by an own-app secret carry `SlackEventReceivedEvent::$verifiedByOwnApp`. `own_app_actors: true` fails the build without an `actor_filter` (PZ-L6). **Listeners must never build an actor from a raw payload or `event.user`**: the only actor is `SlackInteraction::$actor`, resolved by the bundle under these rules |
 | "Add to Slack" replaces another tenant's own app (PZ-L2) | Both kinds share one key per workspace; the install refuses a workspace with an active own-app installation (`own_app_installed`) |
 | Uninstall / revocation | `app_uninstalled` and `tokens_revoked` (naming the installation's bot) revoke once; later requests from that workspace get 403; the event lists the bindings to disable |
 | Secrets in logs | OAuth code, state, client secret, bot / refresh tokens and `response_url` never reach the bundle's log lines or exception messages; the OAuth and response-URL clients use the logger-free HttpClient |
@@ -192,7 +194,7 @@ secret at rest; compare workspace ids and scope ids exactly).
   `response_urls`) in clear; listeners must not log it as is. Handlers get the URL as a redacted `SlackSecret`.
 - **Slack user ids are not secret.** The limiters, not secrecy, protect linking.
 - **Legacy unsigned values** are accepted while `interactions.legacy_until` is in the future (actor and ingress
-  checks still apply; never on resolver-verified clicks). `legacy_until` must be a strict UTC instant
+  checks still apply; never on resolver-verified or own-app clicks). `legacy_until` must be a strict UTC instant
   (`2026-12-05T00:00:00Z`): relative strings fail the build, and an environment value in another form turns legacy
   off. Set it to a fixed instant and let it pass.
 - **Forged legacy buttons during the window (FS-I3).** While `legacy_until` is in the future, anyone who holds a

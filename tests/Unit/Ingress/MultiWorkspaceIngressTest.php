@@ -15,6 +15,7 @@ use Nowo\SlackKitBundle\Event\SlackInteractionReceivedEvent;
 use Nowo\SlackKitBundle\Id\SlackTeamId;
 use Nowo\SlackKitBundle\Id\SlackUserId;
 use Nowo\SlackKitBundle\Ingress\EventsHandler;
+use Nowo\SlackKitBundle\Ingress\HandleSlackEvent;
 use Nowo\SlackKitBundle\Ingress\UnverifiedPayloadPeek;
 use Nowo\SlackKitBundle\Interaction\SlackActorCandidate;
 use Nowo\SlackKitBundle\Interaction\SlackActorFilterInterface;
@@ -266,6 +267,43 @@ final class MultiWorkspaceIngressTest extends TestCase
         $received = $ingress->events->of(SlackEventReceivedEvent::class);
         self::assertCount(1, $received);
         self::assertSame('default:' . Fake::OTHER_TEAM, $received[0]->installation->key());
+        self::assertTrue($received[0]->verifiedByOwnApp, 'listeners can tell an own-app-signed callback (PZ-L7)');
+
+        // Messenger path: the flag travels with the message.
+        $events = new RecordingDispatcher();
+        (new EventsHandler($ingress->store, $events, $ingress->clock))(new HandleSlackEvent('default', ['team_id' => Fake::OTHER_TEAM, 'event' => ['type' => 'app_mention']], true));
+        self::assertTrue($events->of(SlackEventReceivedEvent::class)[0]->verifiedByOwnApp);
+        $events = new RecordingDispatcher();
+        (new EventsHandler($ingress->store, $events, $ingress->clock))(new HandleSlackEvent('default', ['team_id' => Fake::TEAM, 'event' => ['type' => 'app_mention']]));
+        self::assertFalse($events->of(SlackEventReceivedEvent::class)[0]->verifiedByOwnApp);
+    }
+
+    /**
+     * Audit PZ-M2: an own-app click never accepts a legacy unsigned value, even while legacy mode is on: the secret
+     * holder would choose the action and its data (any item id), skipping the nsk1 MAC and its workspace binding.
+     */
+    public function testOwnAppClicksRefuseLegacyUnsignedValues(): void
+    {
+        foreach ([false, true] as $actors) {
+            $ingress = $this->twoWorkspaces(ownAppActors: $actors);
+            $ingress->store->save(Fake::installation(Fake::OTHER_TEAM, Fake::OTHER_TOKEN, null, Fake::OTHER_APP_ID, Fake::OTHER_SECRET));
+            $legacy               = Fake::blockActions('resolve', (string) json_encode(['a' => 'resolve', 'i' => 'issue-of-another-tenant']), Fake::OTHER_TEAM, Fake::OTHER_USER);
+            $legacy['api_app_id'] = Fake::OTHER_APP_ID;
+
+            $response = $ingress->controller->interactions($this->interaction($legacy, Fake::NOW, Fake::OTHER_SECRET));
+            self::assertSame(403, $response->getStatusCode());
+            self::assertSame('Button no longer valid', $response->getContent());
+            self::assertSame([], $ingress->handler->seen);
+            self::assertSame([], $ingress->anonymousHandler->seen);
+
+            // The same legacy value from Slack (the configured app) is still accepted during the window.
+            $slack    = Fake::blockActions('resolve', (string) json_encode(['a' => 'resolve', 'i' => 'issue-1']), Fake::TEAM, Fake::USER);
+            $response = $ingress->controller->interactions($this->interaction($slack));
+            self::assertSame(200, $response->getStatusCode());
+            $seen = $ingress->handler->seen;
+            self::assertCount(1, $seen);
+            self::assertTrue($seen[0]->legacy);
+        }
     }
 
     public function testUninstallRevokesOnlyItsWorkspaceOnceAndListsItsBindings(): void
