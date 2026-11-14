@@ -51,7 +51,9 @@ Behaviour changes to check:
   `InvalidArgumentException`.
 - Own-app installations (new in 1.3) need their Slack `appId`; their clicks get no actor unless
   `installations.own_app_actors: true`, which requires `installations.actor_filter`, and never accept legacy unsigned
-  values (see USAGE "Own apps").
+  values or confirm account links (see USAGE "Own apps").
+- `HandleSlackEvent` gained `verifiedByOwnApp`; messages queued by 1.2 (`ingress.async`) are handled after the upgrade
+  with `false`. Deploy workers and web together: a 1.2 worker cannot read a message queued by 1.3.
 
 ### Several workspaces
 

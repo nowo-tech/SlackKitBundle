@@ -93,7 +93,9 @@ follows in 1.4.0).
   worker test (one kernel, no resetter, two workspaces alternating).
 - Own-app clicks never accept legacy unsigned button values (audit PZ-M2); `installations.own_app_actors: true`
   fails the build without `installations.actor_filter` (PZ-L6); `SlackEventReceivedEvent::$verifiedByOwnApp` and
-  `HandleSlackEvent::$verifiedByOwnApp` flag own-app-signed Events API callbacks (PZ-L7).
+  `HandleSlackEvent::$verifiedByOwnApp` flag own-app-signed Events API callbacks (PZ-L7). Own-app clicks never
+  confirm an account link (PZ-L8). `HandleSlackEvent` messages queued by 1.2 still unserialise after the upgrade,
+  through PHP `unserialize()` and Messenger's `PhpSerializer` (PZ-L9).
 - An own-app installation without its Slack app id is never tried, and an own-app request must carry that app id
   (PZ-L5); one HMAC runs whether or not a workspace has an own-app secret (PZ-L4).
 - The OAuth code, state, client secret and tokens never reach a log, an exception message or the session in clear

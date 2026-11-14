@@ -68,7 +68,7 @@ Until then the code on `main` is a release candidate.
    `ingress.resolver_actors` and a workspace-bound `ResolvedSigningSecret` matching the click's `team.id`). Legacy
    unsigned values and link confirmations are **always** refused on resolver-verified clicks, with or without the
    opt-in: the opt-in only restores the actor. Legacy unsigned values are refused on own-app clicks too (1.3, audit
-   PZ-M2), whatever `installations.own_app_actors` says.
+   PZ-M2), whatever `installations.own_app_actors` says, and so are link confirmations (PZ-L8).
 9. Routing; button value verification (§ below), else 403.
 
 Events API: the `event_id` is claimed after the workspace check; when handling fails the claim is released and the
