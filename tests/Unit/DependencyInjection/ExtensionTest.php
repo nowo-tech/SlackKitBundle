@@ -52,7 +52,11 @@ final class ExtensionTest extends TestCase
     {
         $config = (new Processor())->processConfiguration(new Configuration(), []);
         self::assertSame('en', $config['default_locale']);
-        self::assertSame(['default' => ['app_id' => null, 'signing_secret' => null]], $config['apps']);
+        self::assertSame(['default' => ['app_id' => null, 'signing_secret' => null, 'client_id' => null, 'client_secret' => null]], $config['apps']);
+        self::assertNull($config['installations']['binding_store']);
+        self::assertFalse($config['installations']['oauth']['enabled']);
+        self::assertSame(['chat:write', 'channels:read', 'groups:read', 'users:read'], $config['installations']['oauth']['scopes']);
+        self::assertSame(600, $config['installations']['oauth']['state_ttl']);
         self::assertSame('instance_settings', $config['credentials']['store']);
         self::assertSame(300, $config['ingress']['max_skew_seconds']);
         self::assertSame('P30D', $config['interactions']['value_ttl']);
@@ -192,8 +196,7 @@ final class ExtensionTest extends TestCase
         self::assertSame([], $webhook->getTags(), 'not traced by the profiler, no logger');
         self::assertSame(NowoSlackKitExtension::WEBHOOK_HTTP_CLIENT, (string) $container->getDefinition(IncomingWebhookClient::class)->getArgument(0));
         self::assertSame('lock.factory', (string) $container->getDefinition(ReplayGuard::class)->getArgument(0));
-        $ingress = $container->getDefinition(IngressController::class)->getArguments();
-        self::assertTrue(end($ingress));
+        self::assertTrue($container->getDefinition(IngressController::class)->getArgument(13), 'ingress.resolver_actors');
         self::assertSame([ButtonValueCodecAlias::class, 'deriveCheckedKey'], $container->getDefinition(NowoSlackKitExtension::BUTTON_KEY)->getFactory());
     }
 

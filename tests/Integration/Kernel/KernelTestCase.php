@@ -9,11 +9,17 @@ use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use Nowo\InstanceSettingsBundle\Settings\InstanceSettingsInterface;
 use Nowo\SlackKitBundle\Tests\Support\FakeIdentityStore;
+use Nowo\SlackKitBundle\Tests\Support\FakeInstallAuthorizer;
 use Nowo\SlackKitBundle\Tests\Support\FakeSlackApi;
+use Nowo\SlackKitBundle\Tests\Support\HostBindingStore;
+use Nowo\SlackKitBundle\Tests\Support\HostInstallationStore;
+use Nowo\SlackKitBundle\Tests\Support\IntegrationsController;
 use Nowo\SlackKitBundle\Tests\Support\MemoryStoreProbeController;
 use Nowo\SlackKitBundle\Tests\Support\ProfileController;
 use Nowo\SlackKitBundle\Tests\Support\RecordingLogger;
+use Nowo\SlackKitBundle\Tests\Support\TestEnvLoader;
 use Nowo\SlackKitBundle\Tests\Support\TokenAccountResolver;
+use Nowo\SlackKitBundle\Tests\Support\UpdatingHandler;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -60,12 +66,19 @@ abstract class KernelTestCase extends TestCase
                 $services->set(ProfileController::class)->autowire()->tag('controller.service_arguments')->public();
                 $services->set(MemoryStoreProbeController::class)->autowire()->tag('controller.service_arguments')->public();
                 $services->set('test.accounts', TokenAccountResolver::class)->args([new ReferenceConfigurator('security.token_storage')])->public();
+                $services->set('test.host_store', HostInstallationStore::class)->public();
+                $services->set('test.env', TestEnvLoader::class)->tag('container.env_var_loader');
+                $services->set('test.host_bindings', HostBindingStore::class)->public();
+                $services->set('test.install_authorizer', FakeInstallAuthorizer::class)->public();
+                $services->set(IntegrationsController::class)->autowire()->tag('controller.service_arguments')->public();
+                $services->set('test.updating_handler', UpdatingHandler::class)->autoconfigure()->public();
             },
             static function (RoutingConfigurator $routes): void {
                 $routes->import('.', 'nowo_instance_settings');
                 $routes->import('.', 'nowo_slack_kit');
                 $routes->add('test_profile', '/profile')->controller('Nowo\SlackKitBundle\Tests\Support\ProfileController');
                 $routes->add('test_store_probe', '/test/store-probe')->controller(MemoryStoreProbeController::class);
+                $routes->add('test_integrations', '/test/integrations')->controller(IntegrationsController::class);
             },
             $environment,
             $framework,

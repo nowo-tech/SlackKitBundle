@@ -8,12 +8,14 @@ use Nowo\SlackKitBundle\Credentials\SlackInstallationKey;
 use Nowo\SlackKitBundle\Id\SlackChannelId;
 use Nowo\SlackKitBundle\Id\SlackTeamId;
 use Nowo\SlackKitBundle\Id\SlackUserId;
+use Nowo\SlackKitBundle\Security\SlackSecret;
 
 use function is_int;
 use function is_string;
 
 /**
- * A verified button click handed to a handler (contract §6.2). It carries no raw body, header or token.
+ * A verified button click handed to a handler (contract §6.2). It carries no raw body, header or token; the
+ * `response_url` is kept as a redacted {@see SlackSecret}.
  */
 final readonly class SlackInteraction
 {
@@ -29,6 +31,11 @@ final readonly class SlackInteraction
      * @param string $interactionId stable id of the click (idempotency key)
      * @param bool $legacy the value was a legacy unsigned value
      * @param bool $verifiedByResolver the request was verified with a host-resolved secret (no Slack API answers)
+     * @param SlackOriginalMessage|null $message the clicked message as Slack sent it, when the click came from one
+     * @param SlackSecret|null $responseUrl the click's `response_url` ({@see SlackSecret::responseUrl()}), when valid
+     * @param bool $verifiedByOwnApp the request was verified with the installation's own-app secret (held by whoever
+     *                               pasted it, not only by Slack); it has an actor only with
+     *                               `installations.own_app_actors: true`
      */
     public function __construct(
         public SlackInstallationKey $installation,
@@ -42,6 +49,9 @@ final readonly class SlackInteraction
         public string $interactionId,
         public bool $legacy = false,
         public bool $verifiedByResolver = false,
+        public ?SlackOriginalMessage $message = null,
+        public ?SlackSecret $responseUrl = null,
+        public bool $verifiedByOwnApp = false,
     ) {
     }
 

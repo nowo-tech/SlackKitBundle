@@ -50,9 +50,24 @@ slack:
     confirm:
         text: "Ist das Ihr Slack-Konto? Klicken Sie auf Bestätigen, um es zu verknüpfen."
         button: "Bestätigen"
-        refused: "Diese Bestätigung gilt nicht für Ihr Slack-Konto."
         linked: "Ihr Slack-Konto ist verknüpft."
 interaction:
     link_required: "Verknüpfen und bestätigen Sie zuerst Ihr Slack-Konto (Kontoprofil)."
     button_invalid: "Diese Schaltfläche ist nicht mehr gültig."
     error: "Etwas ist schiefgelaufen. Versuchen Sie es später erneut."
+install:
+    action:
+        add: "Zu Slack hinzufügen"
+    flash:
+        ok: "Slack ist in %team% installiert."
+        cancelled: "Die Slack-Installation wurde abgebrochen."
+        invalid_state: "Der Slack-Installationslink ist ungültig oder abgelaufen. Bitte neu starten."
+        failed: "Slack hat die Installation abgelehnt: %error%."
+    refused:
+        app_mismatch: "Slack hat eine Installation einer anderen Slack-App zurückgegeben. Installiere die für diese Website konfigurierte App."
+        enterprise_install: "Organisationsweite Enterprise-Grid-Installationen werden nicht unterstützt: Installiere die App in einem einzelnen Workspace. Die App bleibt in Slack installiert, bis du sie dort entfernst."
+        token_rotation_unsupported: "In der Slack-App ist die Token-Rotation aktiviert, was nicht unterstützt wird: Deaktiviere sie in den Einstellungen der Slack-App und installiere erneut. Die App bleibt in Slack installiert, bis du sie dort entfernst."
+        missing_scope: "Slack hat nicht alle benötigten Berechtigungen erteilt (fehlend: %scopes%). Installiere erneut und bestätige alle angeforderten Berechtigungen."
+        invalid_grant: "Slack hat keine nutzbare Bot-Installation zurückgegeben. Installiere erneut."
+        not_allowed: "Du darfst Slack hier nicht mehr installieren."
+        own_app_installed: "Dieser Workspace ist bereits über seine eigene Slack-App verbunden. Entferne diese Verbindung, bevor du \"Zu Slack hinzufügen\" verwendest."

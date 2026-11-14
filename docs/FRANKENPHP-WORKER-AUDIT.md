@@ -3,9 +3,9 @@
 | Field | Value |
 |-------|-------|
 | Package | `nowo-tech/slack-kit-bundle` (`symfony-bundle`) |
-| Audited revision | `1.2.1` (first audit `1.0.0`) |
-| Audit date | 2026-11-05, refreshed 2026-11-12 (REQ-RUNTIME-002) |
-| Worker test | [`MemoryStoreWorkerTest`](#worker-test-req-runtime-002): 1,000 requests through `http_kernel`, two workspaces |
+| Audited revision | `1.3.0` (Unreleased; first audit `1.0.0`) |
+| Audit date | 2026-11-05, refreshed 2026-11-12 and 2026-11-14 (spec 237, REQ-RUNTIME-002) |
+| Worker test | [`MemoryStoreWorkerTest`](#worker-test-req-runtime-002): 1,000 requests through `http_kernel`, two workspaces; `MultiWorkspaceWorkerTest` (1.3): 300 signed clicks from two workspaces, one kernel, no resetter |
 | Method | Manual review of every file under `src/`; PHPStan with `nowo-tech/phpstan-frankenphp` (`ruleset-classic`, `ruleset-worker-strict`, `ruleset-hardening`); Igor (`composer igor`); unit tests of `ReplyDispatcher::reset()` and `InMemoryInstallationStore::reset()`; kernel tests with consecutive requests on one container; demo run in worker mode |
 | **Verdict** | ✅ **Viable** — services are stateless (`final readonly`) except the reply buffer (filled and flushed within one request, reset by `kernel.reset`), the in-memory test store (restored at every boundary since 1.2.1) and the route loader's load-once flag; credentials are read from the store on every call and never memoised |
 
@@ -39,7 +39,7 @@ in Messenger consumers started with `--no-reset`, and in long-running console co
 |------|--------|-------|
 | Mutable state in shared services | ✅ | `ReplyDispatcher` pending list (flushed and emptied on `kernel.terminate`, emptied by `kernel.reset`); `InMemoryInstallationStore` (tests / demo; `InMemoryInstallationStoreBoundaryListener` at request, message and console boundaries, plus `kernel.reset`); route loader load-once flag (cache warm-up) |
 | Static properties / `static` locals | ✅ | None (`Blocks`, `Mrkdwn`, `SecretRedactor`, codec helpers are pure static functions) |
-| `ResetInterface` / `kernel.reset` | ✅ | `ReplyDispatcher::reset()`, `InMemoryInstallationStore::reset()` |
+| `ResetInterface` / `kernel.reset` | ✅ | `ReplyDispatcher::reset()`, `InMemoryInstallationStore::reset()`, `InMemoryInstallationBindingStore::reset()` (1.3) |
 | Request / user captured in services | ✅ | Controllers and the Twig extension read the account through the host resolver per call |
 | Credentials | ✅ | Bot token and signing secrets read from the store per call, held in `SlackSecret` only for that call; the button key is derived from `kernel.secret` (a boot-time constant) |
 | Cross-request memory | ✅ (by design) | Replay memory, 429 memory, unhealthy-report throttle and rate limiters live in PSR-6 pools, not in services |
@@ -62,6 +62,8 @@ in Messenger consumers started with `--no-reset`, and in long-running console co
 | `SlackSettingsSection`, `SlackKitTwigExtension` | no mutable state | ✅ |
 | `SlackKitRouteLoader` | load-once flag at router warm-up | ✅ (`@igor-ignore` with reason) |
 | `SlackKitTransportFactory`, `SlackKitTransport`, `RateLimitRetryMiddleware` | `readonly` | ✅ |
+| `ResponseUrlClient`, `SlackOAuthClient`, `InstallController`, `InstallStateStore` (1.3) | `readonly`; the install state lives in the session and a lock, never in the service | ✅ |
+| `InMemoryInstallationBindingStore` (1.3, `binding_store: memory`) | array of bindings (tests, demo) | ✅ (same boundaries as `InMemoryInstallationStore`, `kernel.reset`) |
 
 ## Worker test (REQ-RUNTIME-002)
 
@@ -76,6 +78,12 @@ in Messenger consumers started with `--no-reset`, and in long-running console co
 - **Boundaries:** a sub-request keeps the main unit; Messenger received / handled / failed / stopped; a command
   nested in a message, in another command or in an HTTP request does not clear the outer unit, the outermost one
   does; a boundary never builds the store; other stores get no boundary listener.
+
+`tests/Integration/Functional/MultiWorkspaceWorkerTest.php` (1.3, spec 237): one kernel with a host installation store
+(rows survive like a database) and two workspaces with distinct bot tokens and linked members; **300 signed clicks**
+alternate between them through `http_kernel` and `terminate()`. Each click must reach the handler with its own
+workspace's actor and installation, update its message with exactly its own workspace's token (one `chat.update`
+after the response), leave nothing queued, and memory stays within 2 MiB after request 20.
 
 The bundle has no Doctrine entity manager of its own (the `instance_settings` store reads InstanceSettings per call).
 A host that disables or bypasses the services resetter must clear its own entity managers at every boundary (main

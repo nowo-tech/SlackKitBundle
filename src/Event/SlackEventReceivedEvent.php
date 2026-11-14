@@ -17,6 +17,9 @@ final class SlackEventReceivedEvent
      * @param int $eventTime `event_time` (Unix seconds)
      * @param string $type `event.type`
      * @param array<string, mixed> $event decoded `event` object
+     * @param bool $verifiedByOwnApp the callback was signed with an installation's own-app secret, held by whoever
+     *                               pasted it: its `event.user` (and every other field) may be chosen by that holder,
+     *                               so never treat it as a verified actor (1.3, audit PZ-L7)
      */
     public function __construct(
         public readonly SlackInstallationKey $installation,
@@ -24,6 +27,7 @@ final class SlackEventReceivedEvent
         public readonly int $eventTime,
         public readonly string $type,
         public readonly array $event,
+        public readonly bool $verifiedByOwnApp = false,
     ) {
     }
 }

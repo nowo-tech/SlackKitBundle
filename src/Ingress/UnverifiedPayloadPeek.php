@@ -47,6 +47,29 @@ final readonly class UnverifiedPayloadPeek
     }
 
     /**
+     * The **unverified** workspace id of a body: `team.id` of an interaction payload (`$form`), `team_id` of an Events
+     * API envelope. It only chooses which installation's own-app secret to try (spec 237 FR-004).
+     */
+    public static function teamId(string $rawBody, bool $form): ?string
+    {
+        try {
+            if ($form) {
+                parse_str($rawBody, $fields);
+                $payload = $fields['payload'] ?? null;
+                $decoded = is_string($payload) ? json_decode($payload, true, 32, JSON_THROW_ON_ERROR) : null;
+                $team    = is_array($decoded) && is_array($decoded['team'] ?? null) ? ($decoded['team']['id'] ?? null) : null;
+            } else {
+                $decoded = json_decode($rawBody, true, 32, JSON_THROW_ON_ERROR);
+                $team    = is_array($decoded) ? ($decoded['team_id'] ?? null) : null;
+            }
+        } catch (JsonException) {
+            return null;
+        }
+
+        return is_string($team) ? $team : null;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function actionData(string $rawBody): array

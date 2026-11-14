@@ -10,6 +10,7 @@ use LogicException;
 use SensitiveParameter;
 use Stringable;
 
+use function is_string;
 use function preg_match;
 use function sprintf;
 use function str_starts_with;
@@ -35,11 +36,23 @@ final class SlackSecret implements Stringable, JsonSerializable
     /** Incoming-webhook URL format: only `https://hooks.slack.com/services/…`. */
     public const WEBHOOK_URL_PATTERN = '#^https://hooks\.slack\.com/services/[A-Za-z0-9_/-]{10,200}$#';
 
+    /** Refresh token format of token rotation (`xoxe-1-…`). */
+    public const REFRESH_TOKEN_PATTERN = '/^xoxe-1-[A-Za-z0-9-]{10,500}$/';
+
+    /** OAuth client secret format (Slack issues 32 hexadecimal characters). */
+    public const CLIENT_SECRET_PATTERN = '/^[A-Za-z0-9]{16,128}$/';
+
+    /** Interaction `response_url` format: only `https://hooks.slack.com/actions/…`. */
+    public const RESPONSE_URL_PATTERN = '#^https://hooks\.slack\.com/actions/[A-Za-z0-9_/-]{10,300}$#';
+
     /** Kinds of secret. */
     public const BOT_TOKEN      = 'bot_token';
     public const SIGNING_SECRET = 'signing_secret';
     public const BUTTON_KEY     = 'button_key';
     public const WEBHOOK_URL    = 'webhook_url';
+    public const REFRESH_TOKEN  = 'refresh_token';
+    public const CLIENT_SECRET  = 'client_secret';
+    public const RESPONSE_URL   = 'response_url';
 
     /** Token prefixes refused as a bot token, by kind name. */
     private const OTHER_TOKENS = [
@@ -106,6 +119,76 @@ final class SlackSecret implements Stringable, JsonSerializable
         }
 
         return new self($value, self::WEBHOOK_URL);
+    }
+
+    /**
+     * A refresh token of token rotation (`xoxe-1-`).
+     *
+     * @throws InvalidArgumentException when the value is not a refresh token
+     */
+    public static function refreshToken(#[SensitiveParameter] string $value): self
+    {
+        $value = trim($value);
+        if (preg_match(self::REFRESH_TOKEN_PATTERN, $value) !== 1) {
+            throw new InvalidArgumentException('The Slack refresh token is malformed (expected xoxe-1-…).');
+        }
+
+        return new self($value, self::REFRESH_TOKEN);
+    }
+
+    /**
+     * An OAuth client secret (16-128 letters or digits).
+     *
+     * @throws InvalidArgumentException when the value is malformed
+     */
+    public static function clientSecret(#[SensitiveParameter] string $value): self
+    {
+        $value = trim($value);
+        if (preg_match(self::CLIENT_SECRET_PATTERN, $value) !== 1) {
+            throw new InvalidArgumentException('The Slack client secret is malformed (expected 16-128 letters or digits).');
+        }
+
+        return new self($value, self::CLIENT_SECRET);
+    }
+
+    /**
+     * An interaction `response_url` (`https://hooks.slack.com/actions/…`): it lets anyone who holds it answer the click
+     * for 30 minutes, so it is handled as a credential.
+     *
+     * @throws InvalidArgumentException when the URL is not a Slack response URL
+     */
+    public static function responseUrl(#[SensitiveParameter] string $value): self
+    {
+        $value = trim($value);
+        if (preg_match(self::RESPONSE_URL_PATTERN, $value) !== 1) {
+            throw new InvalidArgumentException('The Slack response URL must be https://hooks.slack.com/actions/….');
+        }
+
+        return new self($value, self::RESPONSE_URL);
+    }
+
+    /**
+     * Same as {@see self::refreshToken()}, but null for an empty or malformed value (stores and OAuth answers).
+     */
+    public static function tryRefreshToken(#[SensitiveParameter] ?string $value): ?self
+    {
+        try {
+            return $value === null || trim($value) === '' ? null : self::refreshToken($value);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
+    }
+
+    /**
+     * Same as {@see self::responseUrl()}, but null for a missing or malformed value.
+     */
+    public static function tryResponseUrl(#[SensitiveParameter] mixed $value): ?self
+    {
+        try {
+            return is_string($value) && trim($value) !== '' ? self::responseUrl($value) : null;
+        } catch (InvalidArgumentException) {
+            return null;
+        }
     }
 
     /**

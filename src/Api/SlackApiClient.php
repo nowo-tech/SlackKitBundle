@@ -158,8 +158,10 @@ final readonly class SlackApiClient implements SlackApiClientInterface
     private function call(SlackInstallationKey $key, string $method, array $arguments, ?SlackInstallation $installation = null): array
     {
         $installation ??= $this->installation($key);
-        $now  = $this->clock->now()->getTimestamp();
-        $wait = $this->memory->rateLimitedFor($key->key(), $method, $now);
+        $now = $this->clock->now()->getTimestamp();
+        // Rate limits are remembered per installation (one bucket per app and workspace, spec 237 FR-018).
+        $memoryKey = $installation->storageKey()->workspaceKey();
+        $wait      = $this->memory->rateLimitedFor($memoryKey, $method, $now);
         if ($wait > 0) {
             throw new SlackRateLimitedException($wait);
         }
@@ -185,7 +187,7 @@ final readonly class SlackApiClient implements SlackApiClientInterface
             if ($status === 429) {
                 $retryAfter = $response->getHeaders(false)['retry-after'][0] ?? '';
                 $seconds    = min($this->policy->maxRetryAfter, ctype_digit($retryAfter) ? max(1, (int) $retryAfter) : self::DEFAULT_RETRY_AFTER);
-                $this->memory->rememberRateLimit($key->key(), $method, $now, $seconds);
+                $this->memory->rememberRateLimit($memoryKey, $method, $now, $seconds);
                 $this->logger->warning('Slack rate limited a call.', ['installation' => $key->key(), 'method' => $method, 'retry_after' => $seconds]);
 
                 throw new SlackRateLimitedException($seconds);
@@ -212,12 +214,12 @@ final readonly class SlackApiClient implements SlackApiClientInterface
         $this->logger->info('Slack refused a call.', ['installation' => $key->key(), 'method' => $method, 'error' => (new SlackApiException($error))->errorCode]);
         if ($error === 'ratelimited') {
             $seconds = min($this->policy->maxRetryAfter, self::DEFAULT_RETRY_AFTER);
-            $this->memory->rememberRateLimit($key->key(), $method, $now, $seconds);
+            $this->memory->rememberRateLimit($memoryKey, $method, $now, $seconds);
 
             throw new SlackRateLimitedException($seconds);
         }
         if (in_array($error, SlackAuthException::CODES, true)) {
-            if ($this->events instanceof EventDispatcherInterface && $this->memory->shouldReportUnhealthy($key->key())) {
+            if ($this->events instanceof EventDispatcherInterface && $this->memory->shouldReportUnhealthy($memoryKey)) {
                 $this->events->dispatch(new SlackInstallationUnhealthyEvent($key, $error));
             }
 
@@ -230,11 +232,18 @@ final readonly class SlackApiClient implements SlackApiClientInterface
         throw new SlackApiException($error);
     }
 
+    /**
+     * The installation of the key. A store answer for another workspace (a store that ignores part of the key) is
+     * refused like a missing installation: one workspace's token never serves another (spec 237).
+     */
     private function installation(SlackInstallationKey $key): SlackInstallation
     {
         $installation = $this->store->find($key);
-        if (!$installation instanceof SlackInstallation || $installation->isRevoked()) {
+        if (!$installation instanceof SlackInstallation || $installation->isRevoked() || !$key->admits($installation)) {
             throw new SlackApiException('not_installed');
+        }
+        if ($installation->isTokenExpired($this->clock->now())) {
+            throw new SlackAuthException('token_expired');
         }
 
         return $installation;

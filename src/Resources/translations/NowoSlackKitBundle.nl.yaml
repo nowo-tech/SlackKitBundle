@@ -50,9 +50,24 @@ slack:
     confirm:
         text: "Is dit je Slack-account? Klik op Bevestigen om het te koppelen."
         button: "Bevestigen"
-        refused: "Deze bevestiging is niet geldig voor je Slack-account."
         linked: "Je Slack-account is gekoppeld."
 interaction:
     link_required: "Koppel en bevestig eerst je Slack-account (accountprofiel)."
     button_invalid: "Deze knop is niet meer geldig."
     error: "Er ging iets mis. Probeer het later opnieuw."
+install:
+    action:
+        add: "Toevoegen aan Slack"
+    flash:
+        ok: "Slack is geïnstalleerd in %team%."
+        cancelled: "De Slack-installatie is geannuleerd."
+        invalid_state: "De Slack-installatielink is ongeldig of verlopen. Begin opnieuw."
+        failed: "Slack heeft de installatie geweigerd: %error%."
+    refused:
+        app_mismatch: "Slack gaf een installatie van een andere Slack-app terug. Installeer de app die voor deze site is ingesteld."
+        enterprise_install: "Organisatiebrede Enterprise Grid-installaties worden niet ondersteund: installeer de app in één workspace. De app blijft in Slack geïnstalleerd tot je hem daar verwijdert."
+        token_rotation_unsupported: "In de Slack-app staat tokenrotatie aan, wat niet wordt ondersteund: zet het uit in de instellingen van de Slack-app en installeer opnieuw. De app blijft in Slack geïnstalleerd tot je hem daar verwijdert."
+        missing_scope: "Slack heeft niet alle benodigde machtigingen gegeven (ontbrekend: %scopes%). Installeer opnieuw en keur alle gevraagde machtigingen goed."
+        invalid_grant: "Slack gaf geen bruikbare botinstallatie terug. Installeer opnieuw."
+        not_allowed: "Je mag Slack hier niet meer installeren."
+        own_app_installed: "Deze workspace is al verbonden via een eigen Slack-app. Verwijder die verbinding voordat je \"Toevoegen aan Slack\" gebruikt."

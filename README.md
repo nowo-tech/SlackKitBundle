@@ -55,6 +55,11 @@ per-request buffer (deferred Slack answers) is flushed on `kernel.terminate` and
 - ✅ **Verified account linking** — typed Slack id or *Find me by e-mail*, confirmation DM with a signed button,
   verification only when the clicker is the claimed member; squatting released after 24 h or by a proven claim;
   four rate limiters; a UiKit account card with CSRF-protected actions.
+- ✅ **Several workspaces (1.3)** — installations keyed by app, enterprise and workspace, owner-scope bindings,
+  "Add to Slack" (OAuth v2 with a host authoriser and single-use state), own-app installations with their own signing
+  secret, uninstall / token revocation once per installation; a workspace never acts, reads or answers for another.
+- ✅ **Message updates (1.3)** — rebuild the clicked message without its spent buttons plus a context line
+  (`chat.update`), or answer through the click's `response_url`.
 - ✅ **Credentials** — installation store interface; InstanceSettings-backed store (encrypted bot token and signing
   secret, admin section with *Test connection*) or in-memory store; secrets wrapped in `SlackSecret` (never dumped,
   serialised or logged); transport errors keep only a redacted copy of the HttpClient message (`SecretRedactor`);

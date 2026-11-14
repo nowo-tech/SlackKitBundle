@@ -8,6 +8,7 @@ use Nowo\SlackKitBundle\Controller\AccountLinkController;
 use Nowo\SlackKitBundle\Controller\TestConnectionController;
 use Nowo\SlackKitBundle\Credentials\SlackInstallationKey;
 use Nowo\SlackKitBundle\Ingress\IngressController;
+use Nowo\SlackKitBundle\Install\InstallController;
 use ReflectionClass;
 use RuntimeException;
 use Symfony\Component\Config\Loader\Loader;
@@ -21,7 +22,8 @@ use function trim;
 
 /**
  * Loads the bundle routes (`type: nowo_slack_kit`): the signed ingress (interactions, and the Events API when
- * enabled; each also with an `{app}` segment), *Test connection* and the account link actions. Paths come from the
+ * enabled; each also with an `{app}` segment), *Test connection*, the account link actions and, since 1.3, "Add to
+ * Slack" (`<ui.prefix>/install/…`, when `installations.oauth.enabled`). Paths come from the
  * configuration; the POST actions are declared with #[Route] on their controllers, which are not autoconfigured, so
  * only this loader mounts them (REQ-SF-004).
  */
@@ -37,6 +39,8 @@ final class SlackKitRouteLoader extends Loader
      * @param string $uiPrefix `ui.prefix`
      * @param bool $testConnection whether *Test connection* is mounted
      * @param bool $linking whether the account link actions are mounted
+     * @param string|null $env environment
+     * @param bool $install whether the "Add to Slack" routes are mounted
      */
     public function __construct(
         private readonly array $ingress,
@@ -44,6 +48,7 @@ final class SlackKitRouteLoader extends Loader
         private readonly bool $testConnection,
         private readonly bool $linking,
         ?string $env = null,
+        private readonly bool $install = false,
     ) {
         parent::__construct($env);
     }
@@ -75,6 +80,9 @@ final class SlackKitRouteLoader extends Loader
         }
         if ($this->linking) {
             $this->attributeRoutes($routes, AccountLinkController::class, rtrim($prefix, '/') . '/account/slack');
+        }
+        if ($this->install) {
+            $this->attributeRoutes($routes, InstallController::class, rtrim($prefix, '/') . '/install');
         }
 
         return $routes;
@@ -111,6 +119,7 @@ final class SlackKitRouteLoader extends Loader
                 $routes->add((string) $declared->name, new Route(
                     $prefix . $suffix,
                     ['_controller' => $method->getName() === '__invoke' ? $controller : $controller . '::' . $method->getName()],
+                    $declared->requirements,
                     methods: $declared->methods,
                 ));
             }

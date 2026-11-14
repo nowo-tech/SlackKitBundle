@@ -107,6 +107,24 @@ final class AccountLinkerTest extends TestCase
         self::assertFalse($linker->linkOf('acc-1')?->isVerified());
     }
 
+    /**
+     * Audit PZ-L8: an own-app-verified click carries signer-chosen team and user ids, like a resolver-verified one: it
+     * never confirms a link, even with a value that would otherwise match.
+     */
+    public function testOwnAppClicksNeverConfirmALink(): void
+    {
+        $linker = $this->linker();
+        $linker->claim('acc-1', Fake::USER);
+        $data = ['acc' => 'acc-1', 'c' => $linker->linkOf('acc-1')?->claimedAt->getTimestamp(), 'uid' => Fake::USER];
+
+        $reply = $linker->confirm($this->interaction($data, ownApp: true));
+        self::assertSame(403, $reply->status);
+        self::assertNotNull($reply->ephemeral);
+        self::assertFalse($linker->linkOf('acc-1')?->isVerified());
+
+        self::assertSame(200, $linker->confirm($this->interaction($data))->status, 'the same click from Slack confirms');
+    }
+
     public function testConfirmationsWithoutClaimTimeOnlyInsideTheLegacyWindow(): void
     {
         $closed = $this->linker();
@@ -283,8 +301,8 @@ final class AccountLinkerTest extends TestCase
     /**
      * @param array<string, mixed> $data
      */
-    private function interaction(array $data, ?string $clicker = Fake::USER, string $team = Fake::TEAM, bool $legacy = false, bool $resolver = false): SlackInteraction
+    private function interaction(array $data, ?string $clicker = Fake::USER, string $team = Fake::TEAM, bool $legacy = false, bool $resolver = false, bool $ownApp = false): SlackInteraction
     {
-        return new SlackInteraction(SlackInstallationKey::default(), AccountLinker::CONFIRM_ACTION, $data, SlackTeamId::fromString($team), $clicker !== null ? SlackUserId::fromString($clicker) : null, null, SlackChannelId::fromString(Fake::DM), '1.0', 'id', $legacy, $resolver);
+        return new SlackInteraction(SlackInstallationKey::default(), AccountLinker::CONFIRM_ACTION, $data, SlackTeamId::fromString($team), $clicker !== null ? SlackUserId::fromString($clicker) : null, null, SlackChannelId::fromString(Fake::DM), '1.0', 'id', $legacy, $resolver, verifiedByOwnApp: $ownApp);
     }
 }

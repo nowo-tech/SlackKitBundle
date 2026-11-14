@@ -100,7 +100,7 @@ final readonly class TestConnectionController
         $installation = $this->store->find(SlackInstallationKey::default());
         $team         = SlackTeamId::tryFrom($result->teamId);
         if ($installation instanceof SlackInstallation && !$installation->teamId instanceof SlackTeamId && $team instanceof SlackTeamId) {
-            $this->store->save(new SlackInstallation($installation->key, $installation->botToken, $team, $installation->allowEmailLookup, $result->userId));
+            $this->store->save($installation->withWorkspace($team, $result->userId));
         }
 
         return $this->back($request, $back, 'success', 'flash.test_ok', ['%team%' => $result->team, '%team_id%' => $result->teamId, '%bot%' => $result->user], $this->translator);
