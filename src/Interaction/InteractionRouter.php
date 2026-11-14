@@ -12,6 +12,7 @@ use Nowo\SlackKitBundle\Id\SlackChannelId;
 use Nowo\SlackKitBundle\Id\SlackTeamId;
 use Nowo\SlackKitBundle\Id\SlackUserId;
 use Nowo\SlackKitBundle\NowoSlackKitBundle;
+use Nowo\SlackKitBundle\Security\SlackSecret;
 use Psr\Container\ContainerInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\Log\LoggerInterface;
@@ -67,11 +68,12 @@ final readonly class InteractionRouter
      * @param array<string, mixed> $payload verified `block_actions` payload
      * @param bool $verifiedByResolver the request was verified with a host-resolved secret: legacy values are refused
      * @param bool $trustActor whether `team.id` / `user.id` may resolve an actor (false for resolver-verified clicks,
-     *                         audit FS-M1)
+     *                         audit FS-M1, and for own-app clicks unless `installations.own_app_actors`, PZ-M1)
+     * @param bool $verifiedByOwnApp the request was verified with the installation's own-app secret
      *
      * @return array{0: SlackInteraction|null, 1: Response|null} the interaction, or the response that refuses it
      */
-    public function parse(array $payload, SlackInstallationKey $installation, bool $verifiedByResolver = false, bool $trustActor = true): array
+    public function parse(array $payload, SlackInstallationKey $installation, bool $verifiedByResolver = false, bool $trustActor = true, bool $verifiedByOwnApp = false): array
     {
         $actions = $payload['actions'] ?? null;
         $action  = is_array($actions) && is_array($actions[0] ?? null) ? $actions[0] : null;
@@ -88,7 +90,7 @@ final readonly class InteractionRouter
         $user    = SlackUserId::tryFrom($this->path($payload, 'user', 'id'));
         $channel = SlackChannelId::tryFrom($this->path($payload, 'container', 'channel_id') ?? $this->path($payload, 'channel', 'id'));
         $ts      = $this->path($payload, 'container', 'message_ts');
-        $base    = new SlackInteraction($installation, $actionId, [], $team, $user, null, $channel, $ts, '', false, $verifiedByResolver);
+        $base    = new SlackInteraction($installation, $actionId, [], $team, $user, null, $channel, $ts, '', false, $verifiedByResolver, null, SlackSecret::tryResponseUrl($payload['response_url'] ?? null));
 
         $legacy = false;
         if (ButtonValueCodec::isSignedFamily($value)) {
@@ -113,7 +115,22 @@ final readonly class InteractionRouter
 
         $interactionId = hash('sha256', ($team->value ?? '') . '|' . ($ts ?? '') . '|' . (is_string($action['action_ts'] ?? null) ? $action['action_ts'] : '') . '|' . ($user->value ?? ''));
 
-        return [new SlackInteraction($installation, $actionId, $data, $team, $user, $trustActor ? $this->actors->resolve($team, $user) : null, $channel, $ts, $interactionId, $legacy, $verifiedByResolver), null];
+        return [new SlackInteraction(
+            $installation,
+            $actionId,
+            $data,
+            $team,
+            $user,
+            $trustActor ? $this->actors->resolve($team, $user, $installation, $verifiedByOwnApp) : null,
+            $channel,
+            $ts,
+            $interactionId,
+            $legacy,
+            $verifiedByResolver,
+            SlackOriginalMessage::fromPayload($payload),
+            SlackSecret::tryResponseUrl($payload['response_url'] ?? null),
+            $verifiedByOwnApp,
+        ), null];
     }
 
     /**
