@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.3.0] - 2026-11-14](#130---2026-11-14)
   - [Added (spec 237, T000a: several workspaces)](#added-spec-237-t000a-several-workspaces)
   - [Added (spec 237, T000c: message updates)](#added-spec-237-t000c-message-updates)
   - [Changed](#changed)
@@ -27,6 +28,8 @@ All notable changes to this project are documented here. The format follows
   - [Notes / deviations from contract v1.1](#notes--deviations-from-contract-v11)
 
 ## [Unreleased]
+
+## [1.3.0] - 2026-11-14
 
 Target: **1.3.0** (minor; no breaking change, see [UPGRADING.md](UPGRADING.md#to-130)). Symfony Beacon spec 237
 "Slack multi-workspace with identity", tasks T000a and T000c (T000b, identities per workspace and link from a click,
@@ -100,6 +103,8 @@ follows in 1.4.0).
   (PZ-L5); one HMAC runs whether or not a workspace has an own-app secret (PZ-L4).
 - The OAuth code, state, client secret and tokens never reach a log, an exception message or the session in clear
   (the session keeps the state's record with an account hash only).
+
+[1.3.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.3.0
 
 ## [1.2.1] - 2026-11-12
 
@@ -407,5 +412,5 @@ Decided by the owner on 2026-11-05 so that Beacon's adoption is a no-op:
   (OAuth, 1.1). VarDumper and the profiler show `[redacted]` through `SlackSecret::__debugInfo()`; there is no
   separate caster.
 
-[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.3.0...HEAD
 [1.0.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.0.0

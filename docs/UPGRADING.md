@@ -7,6 +7,7 @@ are listed per target version.
 
 - [Unreleased](#unreleased)
 - [To 1.3.0](#to-130)
+- [To 1.3.0](#to-130-1)
   - [Several workspaces](#several-workspaces)
   - [Message updates](#message-updates)
 - [To 1.2.1](#to-121)
@@ -20,6 +21,14 @@ are listed per target version.
   - [Values already posted to Slack](#values-already-posted-to-slack)
 
 ## Unreleased
+
+## To 1.3.0
+
+From **1.2.1**:
+
+```bash
+composer update nowo-tech/slack-kit-bundle
+```
 
 ## To 1.3.0
 
