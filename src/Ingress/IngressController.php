@@ -33,6 +33,7 @@ use function is_string;
 use function json_decode;
 use function parse_str;
 use function preg_match;
+use function str_repeat;
 use function str_starts_with;
 use function stream_get_contents;
 use function strlen;
@@ -74,6 +75,8 @@ final readonly class IngressController
      * @param int $maxBodyBytes `ingress.max_body_bytes`
      * @param int $maxSecretCandidates `ingress.max_secret_candidates`
      * @param LoggerInterface $logger PSR-3 logger (route, app and reason only)
+     * @param bool $ownAppActors `installations.own_app_actors`: resolve actors for clicks verified with an
+     *                           installation's own-app secret (audit PZ-M1); off by default
      * @param bool $resolverActors `ingress.resolver_actors`: resolve actors for clicks verified with a host secret
      *                             bound to the click's workspace ({@see ResolvedSigningSecret}); off by default
      */
@@ -92,6 +95,7 @@ final readonly class IngressController
         private int $maxSecretCandidates = 2,
         private LoggerInterface $logger = new NullLogger(),
         private bool $resolverActors = false,
+        private bool $ownAppActors = false,
     ) {
     }
 
@@ -133,16 +137,18 @@ final readonly class IngressController
         }
 
         if ($type !== 'block_actions') {
-            $this->dispatcher?->dispatch(new SlackInteractionReceivedEvent($type, $payload, null));
+            $this->dispatcher?->dispatch(new SlackInteractionReceivedEvent($type, $payload, null, $ownApp));
 
             return $this->text('', Response::HTTP_OK);
         }
 
-        // FS-M1: the team and user of a resolver-verified click are chosen by whoever holds that secret.
-        $trustActor = !$byResolver
-            || ($this->resolverActors && $boundTeam instanceof SlackTeamId && $boundTeam->equals(SlackTeamId::tryFrom(is_array($payload['team'] ?? null) ? ($payload['team']['id'] ?? null) : null)));
-        [$interaction, $refusal] = $this->router->parse($payload, $installation, $byResolver, $trustActor);
-        $this->dispatcher?->dispatch(new SlackInteractionReceivedEvent($type, $payload, $interaction));
+        // FS-M1 / PZ-M1: the team and user of a click verified with a host or own-app secret are chosen by whoever
+        // holds that secret (not only Slack): no actor unless the host opted in.
+        $trustActor = $byResolver
+            ? $this->resolverActors && $boundTeam instanceof SlackTeamId && $boundTeam->equals(SlackTeamId::tryFrom(is_array($payload['team'] ?? null) ? ($payload['team']['id'] ?? null) : null))
+            : !$ownApp || $this->ownAppActors;
+        [$interaction, $refusal] = $this->router->parse($payload, $installation, $byResolver, $trustActor, $ownApp);
+        $this->dispatcher?->dispatch(new SlackInteractionReceivedEvent($type, $payload, $interaction, $ownApp));
 
         return $interaction === null ? ($refusal ?? $this->text('No actions', Response::HTTP_BAD_REQUEST)) : $this->router->dispatch($interaction);
     }
@@ -262,7 +268,7 @@ final readonly class IngressController
         $secret     = $this->apps->signingSecret($appName);
         if ($secret instanceof SlackSecret && $this->verifier->matches($secret, $timestamp, $signature, $body)) {
             $label = 'app:' . $appName;
-        } elseif (($own = $this->ownAppSecret($appName, $body, $contentType === 'application/x-www-form-urlencoded')) instanceof SlackSecret && $this->verifier->matches($own, $timestamp, $signature, $body)) {
+        } elseif ($this->ownAppMatches($appName, $body, $contentType === 'application/x-www-form-urlencoded', $timestamp, $signature)) {
             $label  = 'installation';
             $ownApp = true;
         } elseif ($app === null && $allowResolver && $this->resolver instanceof SigningSecretResolverInterface) {
@@ -291,25 +297,32 @@ final readonly class IngressController
     }
 
     /**
-     * The own-app signing secret of the active installation named by the body's unverified workspace id (FR-004).
-     * Nothing else of the body is read before the signature passes; the workspace is checked again once verified.
+     * Whether the body is signed by the own-app secret of the active installation named by its unverified workspace id
+     * (FR-004). Nothing else of the body is read before the signature passes; the workspace is checked again once
+     * verified. An own-app installation without its Slack app id is never tried (fails closed, audit PZ-L5). One HMAC
+     * runs whether or not an own-app secret exists, so the answer time does not tell which workspaces have one
+     * (PZ-L4); the store lookup itself is the host's.
      */
-    private function ownAppSecret(string $app, string $body, bool $form): ?SlackSecret
+    private function ownAppMatches(string $app, string $body, bool $form, string $timestamp, string $signature): bool
     {
         $team = SlackTeamId::tryFrom(UnverifiedPayloadPeek::teamId($body, $form));
         if (!$team instanceof SlackTeamId) {
-            return null;
+            return false;
         }
         $key          = new SlackInstallationKey($app, $team);
         $installation = $this->store->find($key);
+        $own          = $installation instanceof SlackInstallation && !$installation->isRevoked() && $key->admits($installation) && $installation->appId !== null
+            ? $installation->signingSecret
+            : null;
+        $matches = $this->verifier->matches($own ?? SlackSecret::signingSecret(str_repeat('0', 32)), $timestamp, $signature, $body);
 
-        return $installation instanceof SlackInstallation && !$installation->isRevoked() && $key->admits($installation) ? $installation->signingSecret : null;
+        return $own instanceof SlackSecret && $matches;
     }
 
     /**
-     * The installation of the payload's workspace (and enterprise) for this app, and the app id check: the
-     * installation's own Slack app id when it records one, else `apps.<name>.app_id` (not for an own-app request,
-     * whose app is the installation's).
+     * The installation of the payload's workspace (and enterprise) for this app, and the app id check: an own-app
+     * request must carry the installation's own Slack app id; any other request the installation's when it records one,
+     * else `apps.<name>.app_id`.
      */
     private function checkWorkspace(string $app, mixed $teamId, mixed $apiAppId, mixed $enterpriseId = null, bool $ownApp = false): SlackInstallationKey|Response
     {
@@ -322,8 +335,10 @@ final readonly class IngressController
 
             return $this->text('Workspace mismatch', Response::HTTP_FORBIDDEN);
         }
-        $appId = $installation->appId ?? ($ownApp ? null : $this->apps->appId($app));
-        if ($appId !== null && $apiAppId !== $appId) {
+        // An own-app request must carry the installation's own Slack app id (required, PZ-L5); others the installation's
+        // when it records one, else apps.<name>.app_id.
+        $appId = $ownApp ? (string) $installation->appId : $installation->appId ?? $this->apps->appId($app);
+        if (($ownApp || $appId !== null) && $apiAppId !== $appId) {
             $this->logger->warning('Slack request refused: app mismatch.', ['app' => $app, 'reason' => 'app_id']);
 
             return $this->text('App mismatch', Response::HTTP_FORBIDDEN);

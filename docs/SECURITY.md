@@ -151,7 +151,9 @@ bot token.
 | Anonymous clicks | Handlers need an actor unless registered with `requiresActor: false`; without a link of the click's workspace every other handler is refused (403, ephemeral) |
 | Forged or replayed install callback (login CSRF, code injection) | POST + CSRF to start; host authoriser at start and on return; state = random nonce + HMAC (key derived from `kernel.secret`), record in the session with an account hash, 10-minute TTL, removed on first use and claimed with a lock (single use across processes); same account required |
 | Grant for another app, org-wide install, rotating token, missing scope | Refused before anything is saved (`app_mismatch`, `enterprise_install`, `token_rotation_unsupported`, `missing_scope`, `invalid_grant`); a user token in the answer is never kept |
-| Own-app secret speaks for another workspace | The own-app secret is chosen by the unverified workspace id only and verifies the whole body; the verified payload must then name that same workspace and carry the installation's `api_app_id` |
+| Own-app secret speaks for another workspace | The own-app secret is chosen by the unverified workspace id only and verifies the whole body; the verified payload must then name that same workspace and carry the installation's `api_app_id` (required: an own-app installation without `appId` is never tried) |
+| Own-app secret holder acts as any linked member of the workspace (audit PZ-M1) | The secret is pasted by a tenant admin, so its holder can sign any `user.id`. Own-app clicks resolve **no actor** unless `installations.own_app_actors: true` (off by default, like `ingress.resolver_actors`, FS-M1); `SlackInteraction::$verifiedByOwnApp` and `SlackInteractionReceivedEvent::$verifiedByOwnApp` tell handlers and listeners; with the switch on, `installations.actor_filter` sees the installation key and the trust source and should limit actors to accounts of the scopes bound to that installation |
+| "Add to Slack" replaces another tenant's own app (PZ-L2) | Both kinds share one key per workspace; the install refuses a workspace with an active own-app installation (`own_app_installed`) |
 | Uninstall / revocation | `app_uninstalled` and `tokens_revoked` (naming the installation's bot) revoke once; later requests from that workspace get 403; the event lists the bindings to disable |
 | Secrets in logs | OAuth code, state, client secret, bot / refresh tokens and `response_url` never reach the bundle's log lines or exception messages; the OAuth and response-URL clients use the logger-free HttpClient |
 
@@ -181,7 +183,13 @@ secret at rest; compare workspace ids and scope ids exactly).
 - **A refused grant leaves the app installed in Slack.** The token is not saved, but the workspace admin approved the
   install in Slack; it stays there until they remove the app.
 - **An own-app installation costs one store lookup per request whose app signature fails** (by the unverified
-  workspace id). Keep the ingress behind a proxy rate limit.
+  workspace id), unauthenticated. One HMAC runs whether or not an own-app secret exists, but the host store's own
+  timing (row found, secret decrypted) can still tell an attacker which workspace ids have an own-app installation
+  (audit PZ-L4). Keep the ingress behind a proxy rate limit; a store may cache negative lookups.
+- **Spent-button removal is cosmetic (PZ-L3).** Concurrent clicks can bring a spent button back and a failed update
+  leaves it; handlers must re-check the item's state on every click.
+- **`SlackInteractionReceivedEvent::$payload` is the raw payload (PZ-I5).** It still holds `response_url` (and
+  `response_urls`) in clear; listeners must not log it as is. Handlers get the URL as a redacted `SlackSecret`.
 - **Slack user ids are not secret.** The limiters, not secrecy, protect linking.
 - **Legacy unsigned values** are accepted while `interactions.legacy_until` is in the future (actor and ingress
   checks still apply; never on resolver-verified clicks). `legacy_until` must be a strict UTC instant

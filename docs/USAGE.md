@@ -531,15 +531,53 @@ keep **token rotation off** (rotating grants are refused in 1.3). The flow: POST
 state in the session (10 minutes, bound to the account) → Slack → callback: same session and account, authoriser
 again, `oauth.v2.access`, grant checks (bot token, `app_id`, workspace install, required scopes) → `save()` (a
 re-install updates the token) → `bind()` → `SlackInstallationCompletedEvent` → flash and redirect. Org-wide
-Enterprise Grid installs are refused. Slack's redirect is a top-level GET from slack.com, so the session cookie must
+Enterprise Grid installs are refused, and so is a workspace connected through its own app. Each refusal shows one
+translated message (`install.refused.<reason>`: `app_mismatch`, `enterprise_install`, `token_rotation_unsupported`,
+`missing_scope` with the missing scopes, `invalid_grant`, `not_allowed`, `own_app_installed`); the reason code goes to
+the log only. Slack's redirect is a top-level GET from slack.com, so the session cookie must
 be sent on it (`SameSite=Lax`, Symfony's default; `Strict` makes every callback fail as "invalid or expired").
 
 ### Own apps
 
 A workspace whose policy forbids third-party apps can use its own Slack app: store its installation with the bot
-token **and** its own `signingSecret` (and `appId`, from `auth.test`). A click or event that the configured app's
+token, its own `signingSecret` **and** its Slack `appId` (required: an own-app installation without it is never
+tried; read it with `bots.info` for the `bot_id` that `auth.test` returns). A click or event that the configured app's
 secret does not verify is tried with the own-app secret of the installation named by the request's workspace id, and
-then must carry that installation's `api_app_id`. Such clicks get an actor and Web API answers like any other.
+then must carry that installation's `api_app_id`. Handlers see `$interaction->verifiedByOwnApp` (and listeners
+`SlackInteractionReceivedEvent::$verifiedByOwnApp`).
+
+**Actors are off for own-app clicks by default.** The own-app signing secret is not held by Slack alone: whoever
+pasted it (a tenant admin) can sign a click with **any member id** of that workspace, including members linked to
+other tenants' accounts. So, like resolver-verified clicks, own-app clicks get no actor: handlers that need one refuse
+them, anonymous-safe handlers (`requiresActor: false`) still run, Web API answers work. Turn
+`installations.own_app_actors: true` on only together with an `installations.actor_filter`
+(`SlackActorFilterInterface`): it gets a `SlackActorCandidate` (account id, team, member, installation key,
+`verifiedByOwnApp`) for every verified, active link and can limit own-app clicks to the accounts of the owner scopes
+bound to that installation:
+
+```php
+final readonly class BoundScopesActorFilter implements SlackActorFilterInterface
+{
+    public function mayAct(SlackActorCandidate $candidate): bool
+    {
+        if (!$candidate->verifiedByOwnApp || $candidate->installation === null) {
+            return true;
+        }
+        foreach ($this->bindings->bindingsOf($candidate->installation) as $binding) {
+            if ($this->members->belongsTo($candidate->accountId, $binding->scope)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+```
+
+Bind an own-app installation to one scope only, never for the instance workspace. Own-app and "Add to Slack"
+installations of one workspace share its key (app + workspace): "Add to Slack" refuses a workspace that has an active
+own-app installation (`own_app_installed`), and your own-app form must not overwrite an installation bound to other
+scopes either.
 
 ### Uninstall and token revocation
 
@@ -549,6 +587,13 @@ destinations broken and notify their admins. Later requests from that workspace 
 installed again.
 
 ## Updating the clicked message (1.3)
+
+> **Removing a spent button is cosmetic, not a control.** The replacement is rebuilt from the clicker's copy of the
+> message and sent best effort: two close clicks on the same copy each rebuild from the original, and the last update
+> wins (a spent button can come back); a failed `chat.update` leaves it. The button's signed value stays valid until it
+> expires. Handlers must always re-check the item's own state (already assigned, already resolved by X: answer
+> ephemerally and change nothing). When concurrent clicks matter, rebuild the message from your own state
+> (`new SlackMessage(...)` + `replaceOriginal()`).
 
 Handlers get the clicked message (`$interaction->message`, from the verified payload) and its `response_url`
 (`$interaction->responseUrl`, a redacted `SlackSecret`):

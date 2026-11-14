@@ -44,6 +44,13 @@ Behaviour changes to check:
   configured `apps.<name>.app_id` applies to installations without one.
 - Rate limits remembered by the API client are now keyed by the installation's workspace, so a 429 for one workspace
   never blocks another (a key without a workspace still shares the app bucket).
+- For an Enterprise Grid workspace, `SlackInteraction::$installation->key()` (and the event keys) now include the
+  enterprise: `default:E…:T…` instead of `default:T…`. Compare installations with `sameWorkspace()` or
+  `workspaceKey()`, not with the `key()` string.
+- `new SlackInstallationKey($app, null, $enterprise)` (an enterprise without a workspace) throws
+  `InvalidArgumentException`.
+- Own-app installations (new in 1.3) need their Slack `appId`, and their clicks get no actor unless
+  `installations.own_app_actors: true` (see USAGE "Own apps").
 
 ### Several workspaces
 

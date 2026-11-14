@@ -50,7 +50,6 @@ slack:
     confirm:
         text: "Esta é a sua conta do Slack? Clique em Confirmar para a associar."
         button: "Confirmar"
-        refused: "Esta confirmação não é válida para a sua conta do Slack."
         linked: "A sua conta do Slack está associada."
 interaction:
     link_required: "Primeiro associe e confirme a sua conta do Slack (perfil da conta)."
@@ -64,4 +63,11 @@ install:
         cancelled: "A instalação do Slack foi cancelada."
         invalid_state: "O link de instalação do Slack é inválido ou expirou. Comece de novo."
         failed: "O Slack recusou a instalação: %error%."
-        refused: "A instalação do Slack foi recusada: %reason%."
+    refused:
+        app_mismatch: "O Slack devolveu uma instalação de outra app do Slack. Instale a app configurada para este site."
+        enterprise_install: "As instalações Enterprise Grid para toda a organização não são suportadas: instale a app num único espaço de trabalho. A app continua instalada no Slack até a remover lá."
+        token_rotation_unsupported: "A app do Slack tem a rotação de tokens ativada, o que não é suportado: desative-a nas definições da app do Slack e instale novamente. A app continua instalada no Slack até a remover lá."
+        missing_scope: "O Slack não concedeu todas as permissões necessárias (em falta: %scopes%). Instale novamente e aprove todas as permissões pedidas."
+        invalid_grant: "O Slack não devolveu uma instalação de bot utilizável. Instale novamente."
+        not_allowed: "Já não tem permissão para instalar o Slack aqui."
+        own_app_installed: "Este espaço de trabalho já está ligado através da sua própria app do Slack. Remova essa ligação antes de usar \"Adicionar ao Slack\"."

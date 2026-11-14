@@ -164,7 +164,7 @@ final readonly class InstallController
         if (!$this->authorizer->mayInstall(new SlackInstallAttempt($app, $scope, $account))) {
             $this->logger->info('Slack install refused.', ['app' => $app, 'reason' => 'authorizer']);
 
-            return $this->back($request, $back, 'error', 'install.flash.refused', ['%reason%' => 'not_allowed'], $this->translator);
+            return $this->refused($request, $back, 'not_allowed');
         }
 
         $code         = $request->query->get('code');
@@ -183,17 +183,20 @@ final readonly class InstallController
             return $this->back($request, $back, 'error', 'install.flash.failed', ['%error%' => $e->errorCode], $this->translator);
         }
 
-        $refusal = $this->refusal($app, $grant);
-        if ($refusal !== null || !$grant->team instanceof SlackTeamId || !$grant->botToken instanceof SlackSecret) {
+        $refusal  = $this->refusal($app, $grant);
+        $key      = $grant->team instanceof SlackTeamId ? new SlackInstallationKey($app, $grant->team, $grant->enterprise) : null;
+        $existing = $key instanceof SlackInstallationKey ? $this->store->find($key) : null;
+        $existing = $key instanceof SlackInstallationKey && $existing instanceof SlackInstallation && $key->admits($existing) ? $existing : null;
+        // PZ-L2: own-app and distributed installations of one workspace share its key; never replace an active own app.
+        $refusal ??= $existing instanceof SlackInstallation && !$existing->isRevoked() && $existing->signingSecret instanceof SlackSecret ? 'own_app_installed' : null;
+        if ($refusal !== null || !$key instanceof SlackInstallationKey || !$grant->team instanceof SlackTeamId || !$grant->botToken instanceof SlackSecret) {
             $this->logger->warning('Slack install refused.', ['app' => $app, 'reason' => $refusal ?? 'invalid_grant']);
 
-            return $this->back($request, $back, 'error', 'install.flash.refused', ['%reason%' => $refusal ?? 'invalid_grant'], $this->translator);
+            return $this->refused($request, $back, $refusal ?? 'invalid_grant', $refusal === 'missing_scope' ? array_values(array_diff($this->scopes, $grant->scopes)) : []);
         }
 
         $now         = DateTimeImmutable::createFromInterface($this->clock->now());
-        $key         = new SlackInstallationKey($app, $grant->team, $grant->enterprise);
-        $existing    = $this->store->find($key);
-        $reinstalled = $existing instanceof SlackInstallation && $key->admits($existing);
+        $reinstalled = $existing instanceof SlackInstallation;
         $this->store->save(new SlackInstallation(
             $key,
             $grant->botToken,
@@ -213,6 +216,17 @@ final readonly class InstallController
         $this->logger->info('Slack app installed.', ['app' => $app, 'installation' => $key->key(), 'reinstalled' => $reinstalled]);
 
         return $this->back($request, $back, 'success', 'install.flash.ok', ['%team%' => $grant->teamName], $this->translator);
+    }
+
+    /**
+     * A refusal with one translated message per reason (`install.refused.<reason>`, audit PZ-L1); the code itself only
+     * goes to the log.
+     *
+     * @param list<string> $missingScopes scopes Slack did not grant (`missing_scope`)
+     */
+    private function refused(Request $request, string $back, string $reason, array $missingScopes = []): RedirectResponse
+    {
+        return $this->back($request, $back, 'error', 'install.refused.' . $reason, ['%scopes%' => implode(', ', $missingScopes)], $this->translator);
     }
 
     /**

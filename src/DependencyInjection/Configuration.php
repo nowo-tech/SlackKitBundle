@@ -68,6 +68,8 @@ final class Configuration implements ConfigurationInterface
                     ->addDefaultsIfNotSet()
                     ->children()
                         ->scalarNode('binding_store')->defaultNull()->info('Service id implementing SlackInstallationBindingStoreInterface, or memory (tests and demos only).')->end()
+                        ->booleanNode('own_app_actors')->defaultFalse()->info('Resolve actors for clicks verified with an installation own-app secret. Whoever holds that secret can sign clicks as any linked member of the workspace: pair it with actor_filter.')->end()
+                        ->scalarNode('actor_filter')->defaultNull()->info('Service id implementing SlackActorFilterInterface: the last word on which linked account may act for a click on an installation.')->end()
                         ->arrayNode('oauth')
                             ->addDefaultsIfNotSet()
                             ->children()

@@ -196,8 +196,7 @@ final class ExtensionTest extends TestCase
         self::assertSame([], $webhook->getTags(), 'not traced by the profiler, no logger');
         self::assertSame(NowoSlackKitExtension::WEBHOOK_HTTP_CLIENT, (string) $container->getDefinition(IncomingWebhookClient::class)->getArgument(0));
         self::assertSame('lock.factory', (string) $container->getDefinition(ReplayGuard::class)->getArgument(0));
-        $ingress = $container->getDefinition(IngressController::class)->getArguments();
-        self::assertTrue(end($ingress));
+        self::assertTrue($container->getDefinition(IngressController::class)->getArgument(13), 'ingress.resolver_actors');
         self::assertSame([ButtonValueCodecAlias::class, 'deriveCheckedKey'], $container->getDefinition(NowoSlackKitExtension::BUTTON_KEY)->getFactory());
     }
 

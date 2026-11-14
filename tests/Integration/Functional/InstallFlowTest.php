@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\SlackKitBundle\Tests\Integration\Functional;
 
+use DateTimeImmutable;
 use Nowo\SlackKitBundle\Credentials\SlackInstallationKey;
 use Nowo\SlackKitBundle\Event\SlackInstallationCompletedEvent;
 use Nowo\SlackKitBundle\Id\SlackTeamId;
@@ -21,11 +22,13 @@ use Twig\Environment;
 
 use function array_filter;
 use function base64_encode;
+use function htmlspecialchars;
 use function is_string;
 use function parse_str;
 use function parse_url;
 use function str_starts_with;
 
+use const ENT_QUOTES;
 use const PHP_URL_QUERY;
 
 /**
@@ -116,12 +119,12 @@ final class InstallFlowTest extends KernelTestCase
      */
     public static function refusedGrants(): iterable
     {
-        yield 'missing required scope' => [['scope' => 'chat:write'], null, 'missing_scope'];
-        yield 'another Slack app' => [['app_id' => Fake::OTHER_APP_ID], null, 'app_mismatch'];
-        yield 'org-wide install' => [['is_enterprise_install' => true, 'enterprise' => ['id' => Fake::ENTERPRISE]], null, 'enterprise_install'];
-        yield 'token rotation' => [['refresh_token' => Fake::REFRESH_TOKEN, 'expires_in' => 43200], null, 'token_rotation_unsupported'];
-        yield 'user token only' => [['token_type' => 'user', 'access_token' => 'xoxp-not-a-bot'], null, 'invalid_grant'];
-        yield 'no workspace' => [['team' => null], null, 'invalid_grant'];
+        yield 'missing required scope' => [['scope' => 'chat:write'], null, 'Slack did not grant every permission the app needs (missing: channels:read, groups:read, users:read).'];
+        yield 'another Slack app' => [['app_id' => Fake::OTHER_APP_ID], null, 'Slack returned an installation of another Slack app.'];
+        yield 'org-wide install' => [['is_enterprise_install' => true, 'enterprise' => ['id' => Fake::ENTERPRISE]], null, 'Org-wide Enterprise Grid installs are not supported: install the app into one workspace.'];
+        yield 'token rotation' => [['refresh_token' => Fake::REFRESH_TOKEN, 'expires_in' => 43200], null, 'turn it off in the Slack app settings and install again'];
+        yield 'user token only' => [['token_type' => 'user', 'access_token' => 'xoxp-not-a-bot'], null, 'Slack did not return a usable bot installation.'];
+        yield 'no workspace' => [['team' => null], null, 'Slack did not return a usable bot installation.'];
         yield 'slack refuses the code' => [[], 'invalid_code', 'invalid_code'];
     }
 
@@ -129,7 +132,7 @@ final class InstallFlowTest extends KernelTestCase
      * @param array<string, mixed> $override
      */
     #[DataProvider('refusedGrants')]
-    public function testRefusedGrantsSaveNothing(array $override, ?string $error, string $reason): void
+    public function testRefusedGrantsSaveNothing(array $override, ?string $error, string $message): void
     {
         $kernel                               = $this->bootKernel(self::CONFIG);
         $client                               = $this->client($kernel);
@@ -140,9 +143,40 @@ final class InstallFlowTest extends KernelTestCase
         $client->request('GET', '/slack-kit/install/callback', ['code' => 'fake-code-1', 'state' => $query['state']]);
         $client->followRedirect();
 
-        self::assertStringContainsString($reason, (string) $client->getResponse()->getContent());
+        $content = (string) $client->getResponse()->getContent();
+        self::assertStringContainsString(htmlspecialchars($message, ENT_QUOTES), $content, 'one clear translated message per reason (PZ-L1)');
+        foreach (['token_rotation_unsupported', 'enterprise_install', 'app_mismatch', 'missing_scope', 'invalid_grant'] as $code) {
+            self::assertStringNotContainsString($code, $content, 'no raw reason code shown');
+        }
         self::assertSame([], $this->hostStore($kernel)->rows);
         self::assertSame([], $this->hostBindings($kernel)->rows);
+    }
+
+    /**
+     * Audit PZ-L2: "Add to Slack" never replaces an active own-app installation of the same workspace; a revoked one
+     * may be replaced.
+     */
+    public function testAnOwnAppInstallationIsNeverReplaced(): void
+    {
+        $kernel = $this->bootKernel(self::CONFIG);
+        $client = $this->client($kernel);
+        $own    = Fake::installation(Fake::OTHER_TEAM, Fake::TOKEN, null, Fake::OTHER_APP_ID, Fake::OTHER_SECRET);
+        $this->hostStore($kernel)->save($own);
+
+        $query                           = $this->start($client);
+        $this->fakeSlack($kernel)->oauth = $this->grant();
+        $client->request('GET', '/slack-kit/install/callback', ['code' => 'fake-code-1', 'state' => $query['state']]);
+        $client->followRedirect();
+        self::assertStringContainsString('already connected through its own Slack app', (string) $client->getResponse()->getContent());
+        $kept = $this->hostStore($kernel)->find(new SlackInstallationKey('default', SlackTeamId::fromString(Fake::OTHER_TEAM)));
+        self::assertSame(Fake::OTHER_SECRET, $kept?->signingSecret?->reveal(), 'the own app is untouched');
+        self::assertSame(Fake::TOKEN, $kept->botToken->reveal());
+        self::assertSame([], $this->hostBindings($kernel)->rows);
+
+        $this->hostStore($kernel)->markRevoked(new SlackInstallationKey('default', SlackTeamId::fromString(Fake::OTHER_TEAM)), new DateTimeImmutable('@1'));
+        $query = $this->start($client);
+        $client->request('GET', '/slack-kit/install/callback', ['code' => 'fake-code-2', 'state' => $query['state']]);
+        self::assertSame(Fake::OTHER_TOKEN, $this->hostStore($kernel)->find(new SlackInstallationKey('default', SlackTeamId::fromString(Fake::OTHER_TEAM)))?->botToken->reveal());
     }
 
     public function testCancelledStaleForeignAndRevokedAttempts(): void
@@ -171,7 +205,7 @@ final class InstallFlowTest extends KernelTestCase
         $this->fakeSlack($kernel)->oauth  = $this->grant();
         $client->request('GET', '/slack-kit/install/callback', ['code' => 'fake-code-1', 'state' => $query['state']]);
         $client->followRedirect();
-        self::assertStringContainsString('not_allowed', (string) $client->getResponse()->getContent());
+        self::assertStringContainsString('You are no longer allowed to install Slack here.', (string) $client->getResponse()->getContent());
         self::assertSame([], $this->hostStore($kernel)->rows);
         self::assertSame([], $this->fakeSlack($kernel)->calls, 'the code is never exchanged for a refused attempt');
 

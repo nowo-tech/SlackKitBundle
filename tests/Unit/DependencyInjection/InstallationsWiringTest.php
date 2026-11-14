@@ -14,9 +14,11 @@ use Nowo\SlackKitBundle\Credentials\InMemoryInstallationStoreBoundaryListener;
 use Nowo\SlackKitBundle\Credentials\SlackInstallationBindingStoreInterface;
 use Nowo\SlackKitBundle\DependencyInjection\NowoSlackKitExtension;
 use Nowo\SlackKitBundle\Ingress\EventsHandler;
+use Nowo\SlackKitBundle\Ingress\IngressController;
 use Nowo\SlackKitBundle\Install\InstallController;
 use Nowo\SlackKitBundle\Install\SlackInstallAuthorizerInterface;
 use Nowo\SlackKitBundle\Install\SlackOAuthClient;
+use Nowo\SlackKitBundle\Interaction\ActorResolver;
 use Nowo\SlackKitBundle\Interaction\ReplyDispatcher;
 use Nowo\SlackKitBundle\Routing\SlackKitRouteLoader;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -55,6 +57,15 @@ final class InstallationsWiringTest extends TestCase
         self::assertTrue($container->getAlias(ResponseUrlClientInterface::class)->isPublic());
         self::assertSame(NowoSlackKitExtension::WEBHOOK_HTTP_CLIENT, (string) $container->getDefinition(ResponseUrlClient::class)->getArgument(0), 'the response URL is a credential: logger-free client');
         self::assertSame(ResponseUrlClientInterface::class, (string) $container->getDefinition(ReplyDispatcher::class)->getArgument(2));
+        self::assertFalse($container->getDefinition(IngressController::class)->getArgument(14), 'own-app clicks get no actor by default (PZ-M1)');
+        self::assertNull($container->getDefinition(ActorResolver::class)->getArgument(1));
+    }
+
+    public function testOwnAppActorsAndTheActorFilterAreOptIn(): void
+    {
+        $container = $this->load(['installations' => ['own_app_actors' => true, 'actor_filter' => 'app.actor_filter']]);
+        self::assertTrue($container->getDefinition(IngressController::class)->getArgument(14));
+        self::assertSame('app.actor_filter', (string) $container->getDefinition(ActorResolver::class)->getArgument(1));
     }
 
     public function testDddHostPlugsItsStoresAndAuthoriser(): void
@@ -108,6 +119,7 @@ final class InstallationsWiringTest extends TestCase
         yield 'no account resolver' => [['installations' => ['oauth' => ['enabled' => true, 'authorizer' => 'app.authorizer']] + $oauth['installations']] + $oauth, InvalidConfigurationException::class];
         yield 'empty scopes' => [['installations' => ['oauth' => ['scopes' => []] + $oauth['installations']['oauth']] + $oauth['installations']] + $oauth, InvalidConfigurationException::class];
         yield 'literal client secret' => [['apps' => ['default' => ['client_secret' => 'literalclientsecretliteral000000']]], InvalidConfigurationException::class];
+        yield 'own-app actors env switch' => [['installations' => ['own_app_actors' => '%env(bool:SLACK_OWN_APP_ACTORS)%']], InvalidConfigurationException::class];
         yield 'env switch' => [['installations' => ['oauth' => ['enabled' => '%env(bool:SLACK_OAUTH)%']]], InvalidConfigurationException::class];
         yield 'bad scope' => [['installations' => ['oauth' => ['scopes' => ['Chat Write']]]], InvalidConfigurationException::class];
         yield 'state ttl over 10 minutes' => [['installations' => ['oauth' => ['state_ttl' => 601]]], InvalidConfigurationException::class];

@@ -33,6 +33,9 @@ final readonly class SlackInteraction
      * @param bool $verifiedByResolver the request was verified with a host-resolved secret (no Slack API answers)
      * @param SlackOriginalMessage|null $message the clicked message as Slack sent it, when the click came from one
      * @param SlackSecret|null $responseUrl the click's `response_url` ({@see SlackSecret::responseUrl()}), when valid
+     * @param bool $verifiedByOwnApp the request was verified with the installation's own-app secret (held by whoever
+     *                               pasted it, not only by Slack); it has an actor only with
+     *                               `installations.own_app_actors: true`
      */
     public function __construct(
         public SlackInstallationKey $installation,
@@ -48,6 +51,7 @@ final readonly class SlackInteraction
         public bool $verifiedByResolver = false,
         public ?SlackOriginalMessage $message = null,
         public ?SlackSecret $responseUrl = null,
+        public bool $verifiedByOwnApp = false,
     ) {
     }
 

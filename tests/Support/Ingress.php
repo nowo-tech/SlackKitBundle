@@ -17,6 +17,7 @@ use Nowo\SlackKitBundle\Interaction\ButtonValueCodec;
 use Nowo\SlackKitBundle\Interaction\InteractionRouter;
 use Nowo\SlackKitBundle\Interaction\LegacyValuePolicy;
 use Nowo\SlackKitBundle\Interaction\ReplyDispatcher;
+use Nowo\SlackKitBundle\Interaction\SlackActorFilterInterface;
 use stdClass;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
@@ -55,6 +56,8 @@ final class Ingress
         int $maxBody = 65_536,
         bool $withTeam = true,
         bool $resolverActors = false,
+        bool $ownAppActors = false,
+        ?SlackActorFilterInterface $actorFilter = null,
     ) {
         $this->clock            = new MockClock('@' . Fake::NOW);
         $this->store            = Fake::store($withTeam);
@@ -71,7 +74,7 @@ final class Ingress
             ['beacon.issue.resolve' => true, 'demo.ping' => false, 'demo.broken' => false],
             $this->codec,
             new LegacyValuePolicy($legacyUntil !== null ? 'a' : null, $legacyMap, $legacyUntil !== null ? new DateTimeImmutable($legacyUntil) : null, $this->clock),
-            new ActorResolver($this->identities),
+            new ActorResolver($this->identities, $actorFilter),
             $this->replies,
             $this->events,
             null,
@@ -93,6 +96,7 @@ final class Ingress
             2,
             $this->logger,
             $resolverActors,
+            $ownAppActors,
         );
     }
 }

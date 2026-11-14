@@ -68,11 +68,12 @@ final readonly class InteractionRouter
      * @param array<string, mixed> $payload verified `block_actions` payload
      * @param bool $verifiedByResolver the request was verified with a host-resolved secret: legacy values are refused
      * @param bool $trustActor whether `team.id` / `user.id` may resolve an actor (false for resolver-verified clicks,
-     *                         audit FS-M1)
+     *                         audit FS-M1, and for own-app clicks unless `installations.own_app_actors`, PZ-M1)
+     * @param bool $verifiedByOwnApp the request was verified with the installation's own-app secret
      *
      * @return array{0: SlackInteraction|null, 1: Response|null} the interaction, or the response that refuses it
      */
-    public function parse(array $payload, SlackInstallationKey $installation, bool $verifiedByResolver = false, bool $trustActor = true): array
+    public function parse(array $payload, SlackInstallationKey $installation, bool $verifiedByResolver = false, bool $trustActor = true, bool $verifiedByOwnApp = false): array
     {
         $actions = $payload['actions'] ?? null;
         $action  = is_array($actions) && is_array($actions[0] ?? null) ? $actions[0] : null;
@@ -120,7 +121,7 @@ final readonly class InteractionRouter
             $data,
             $team,
             $user,
-            $trustActor ? $this->actors->resolve($team, $user) : null,
+            $trustActor ? $this->actors->resolve($team, $user, $installation, $verifiedByOwnApp) : null,
             $channel,
             $ts,
             $interactionId,
@@ -128,6 +129,7 @@ final readonly class InteractionRouter
             $verifiedByResolver,
             SlackOriginalMessage::fromPayload($payload),
             SlackSecret::tryResponseUrl($payload['response_url'] ?? null),
+            $verifiedByOwnApp,
         ), null];
     }
 

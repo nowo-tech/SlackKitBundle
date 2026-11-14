@@ -48,6 +48,8 @@ nowo_slack_kit:
 
     installations:                    # several workspaces (1.3, spec 237)
         binding_store: null           # service id implementing SlackInstallationBindingStoreInterface | memory (tests / demos only)
+        own_app_actors: false         # actors for own-app-verified clicks (literal boolean); the secret holder can act as any linked member: pair with actor_filter
+        actor_filter: null            # service id implementing SlackActorFilterInterface (last word on who may act on an installation)
         oauth:
             enabled: false            # "Add to Slack" routes under ui.prefix/install (literal boolean)
             authorizer: null          # service id implementing SlackInstallAuthorizerInterface (required when enabled)
@@ -142,12 +144,14 @@ The store contract (encryption at rest, scoped reads, idempotent `markRevoked()`
 ## installations
 
 Several workspaces behind one app (spec 237). `binding_store` gives owner scopes the use of installations; the
-revocation event lists them. `oauth.enabled` mounts "Add to Slack" (`POST {ui.prefix}/install/{app}/{scope_type}/{scope_id}`,
+revocation event lists them. `own_app_actors` (off) lets clicks verified with an installation's own-app secret resolve
+an actor; whoever holds that secret can sign as any member, so enable it only with an `actor_filter` that limits actors
+to the accounts of the scopes bound to the installation ([SECURITY.md](SECURITY.md#several-workspaces-13-spec-237)). `oauth.enabled` mounts "Add to Slack" (`POST {ui.prefix}/install/{app}/{scope_type}/{scope_id}`,
 `GET {ui.prefix}/install/callback`) and needs: a `credentials.store` that keeps several installations (not
 `instance_settings`), `binding_store`, `oauth.authorizer`, an account resolver, a non-empty `scopes` list, and for
 each app offered: `app_id`, `client_id` and `client_secret`. The single-use state uses `ingress.replay_lock_factory`
 and the session. Build-time refusals: `oauth` with the `instance_settings` store or without `binding_store`,
-authoriser or account resolver; empty `scopes`; a literal `client_secret`; `oauth.enabled` as an env placeholder;
+authoriser or account resolver; empty `scopes`; a literal `client_secret`; `oauth.enabled` or `own_app_actors` as an env placeholder;
 `binding_store: memory` outside debug and test.
 
 ## ingress

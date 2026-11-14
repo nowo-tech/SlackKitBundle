@@ -138,7 +138,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
      */
     public function load(array $configs, ContainerBuilder $container): void
     {
-        /** @var array{default_locale: string, api: array{timeout: float, max_duration: float, max_response_bytes: int}, default_app: string, apps: array<string, array{app_id: string|null, signing_secret: string|null, client_id: string|null, client_secret: string|null}>, credentials: array{store: string, settings_section: string}, installations: array{binding_store: string|null, oauth: array{enabled: bool, authorizer: string|null, account_resolver: string|null, scopes: list<string>, optional_scopes: list<string>, state_ttl: int, return_route: string|null}}, ingress: array{enabled: bool, prefix: string, interactions_path: string|null, events_path: string|null, events_enabled: bool, max_body_bytes: int, max_skew_seconds: int, replay_lock_factory: string, max_secret_candidates: int, signing_secret_resolver: string|null, resolver_actors: bool, async: bool, transport: string}, interactions: array{value_ttl: string, previous_secrets: list<string>, legacy_value_key: string|null, legacy_action_map: array<string, string>, legacy_until: string|null}, linking: array{enabled: bool, identity_store: string|null, account_resolver: string|null, claim_ttl: string, confirmation_ttl: string, email_lookup: bool, return_route: string|null, rate_limiter_cache_pool: string, claim_per_account: array{limit: int, interval: string}, email_lookup_per_account: array{limit: int, interval: string}, confirmation_per_account: array{limit: int, interval: string}, confirmation_per_target: array{limit: int, interval: string}}, test_connection: array{enabled: bool, rate_limit: array{limit: int, interval: string}}, rate_limit: array{max_retry_after: int, max_attempts: int}, notifier: array{enabled: bool}, ui: array{prefix: string}} $config */
+        /** @var array{default_locale: string, api: array{timeout: float, max_duration: float, max_response_bytes: int}, default_app: string, apps: array<string, array{app_id: string|null, signing_secret: string|null, client_id: string|null, client_secret: string|null}>, credentials: array{store: string, settings_section: string}, installations: array{binding_store: string|null, own_app_actors: bool, actor_filter: string|null, oauth: array{enabled: bool, authorizer: string|null, account_resolver: string|null, scopes: list<string>, optional_scopes: list<string>, state_ttl: int, return_route: string|null}}, ingress: array{enabled: bool, prefix: string, interactions_path: string|null, events_path: string|null, events_enabled: bool, max_body_bytes: int, max_skew_seconds: int, replay_lock_factory: string, max_secret_candidates: int, signing_secret_resolver: string|null, resolver_actors: bool, async: bool, transport: string}, interactions: array{value_ttl: string, previous_secrets: list<string>, legacy_value_key: string|null, legacy_action_map: array<string, string>, legacy_until: string|null}, linking: array{enabled: bool, identity_store: string|null, account_resolver: string|null, claim_ttl: string, confirmation_ttl: string, email_lookup: bool, return_route: string|null, rate_limiter_cache_pool: string, claim_per_account: array{limit: int, interval: string}, email_lookup_per_account: array{limit: int, interval: string}, confirmation_per_account: array{limit: int, interval: string}, confirmation_per_target: array{limit: int, interval: string}}, test_connection: array{enabled: bool, rate_limit: array{limit: int, interval: string}}, rate_limit: array{max_retry_after: int, max_attempts: int}, notifier: array{enabled: bool}, ui: array{prefix: string}} $config */
         $config = $this->processConfiguration(new Configuration(), $configs);
         $this->assertLiteralBooleans($config);
         $this->assertSecretsFromEnvironment($container, $config);
@@ -388,7 +388,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
      */
     private function registerInteractions(ContainerBuilder $container, array $config): void
     {
-        /** @var array{default_locale: string, interactions: array{value_ttl: string, previous_secrets: list<string>, legacy_value_key: string|null, legacy_action_map: array<string, string>, legacy_until: string|null}, linking: array{enabled: bool, identity_store: string|null}} $config */
+        /** @var array{default_locale: string, interactions: array{value_ttl: string, previous_secrets: list<string>, legacy_value_key: string|null, legacy_action_map: array<string, string>, legacy_until: string|null}, linking: array{enabled: bool, identity_store: string|null}, installations: array{actor_filter: string|null}} $config */
         $interactions = $config['interactions'];
         $container->setDefinition(self::BUTTON_KEY, (new Definition())->setClass(SlackSecret::class)->setFactory([ButtonValueCodec::class, 'deriveCheckedKey'])->setArguments(['%kernel.secret%', new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE)]));
         $previous = [];
@@ -432,7 +432,8 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
         ]));
 
         $identities = $config['linking']['enabled'] && is_string($config['linking']['identity_store']) ? new Reference($config['linking']['identity_store']) : null;
-        $container->setDefinition(ActorResolver::class, new Definition(ActorResolver::class, [$identities]));
+        $filter     = $config['installations']['actor_filter'];
+        $container->setDefinition(ActorResolver::class, new Definition(ActorResolver::class, [$identities, is_string($filter) ? new Reference($filter) : null]));
         $container->setDefinition(ReplyDispatcher::class, (new Definition(ReplyDispatcher::class, [
             new Reference(SlackApiClientInterface::class),
             new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE),
@@ -463,7 +464,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
      */
     private function registerIngress(ContainerBuilder $container, array $config, bool $bindings = false): array
     {
-        /** @var array{ingress: array{enabled: bool, prefix: string, interactions_path: string|null, events_path: string|null, events_enabled: bool, max_body_bytes: int, max_skew_seconds: int, replay_lock_factory: string, max_secret_candidates: int, signing_secret_resolver: string|null, resolver_actors: bool, async: bool, transport: string}} $config */
+        /** @var array{ingress: array{enabled: bool, prefix: string, interactions_path: string|null, events_path: string|null, events_enabled: bool, max_body_bytes: int, max_skew_seconds: int, replay_lock_factory: string, max_secret_candidates: int, signing_secret_resolver: string|null, resolver_actors: bool, async: bool, transport: string}, installations: array{own_app_actors: bool}} $config */
         $ingress = $config['ingress'];
         $prefix  = '/' . trim($ingress['prefix'], '/');
         $paths   = [
@@ -505,6 +506,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
             $ingress['max_secret_candidates'],
             new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE),
             $ingress['resolver_actors'],
+            $config['installations']['own_app_actors'],
         ]))
             ->addTag('monolog.logger', ['channel' => 'slack'])
             ->setAutoconfigured(false)
@@ -635,14 +637,15 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
     {
         /** @var array<string, array<string, mixed>> $config */
         $switches = [
-            'ingress.enabled'             => $config['ingress']['enabled'] ?? null,
-            'ingress.events_enabled'      => $config['ingress']['events_enabled'] ?? null,
-            'ingress.async'               => $config['ingress']['async'] ?? null,
-            'linking.enabled'             => $config['linking']['enabled'] ?? null,
-            'linking.email_lookup'        => $config['linking']['email_lookup'] ?? null,
-            'test_connection.enabled'     => $config['test_connection']['enabled'] ?? null,
-            'notifier.enabled'            => $config['notifier']['enabled'] ?? null,
-            'installations.oauth.enabled' => $config['installations']['oauth']['enabled'] ?? null,
+            'ingress.enabled'              => $config['ingress']['enabled'] ?? null,
+            'ingress.events_enabled'       => $config['ingress']['events_enabled'] ?? null,
+            'ingress.async'                => $config['ingress']['async'] ?? null,
+            'linking.enabled'              => $config['linking']['enabled'] ?? null,
+            'linking.email_lookup'         => $config['linking']['email_lookup'] ?? null,
+            'test_connection.enabled'      => $config['test_connection']['enabled'] ?? null,
+            'notifier.enabled'             => $config['notifier']['enabled'] ?? null,
+            'installations.oauth.enabled'  => $config['installations']['oauth']['enabled'] ?? null,
+            'installations.own_app_actors' => $config['installations']['own_app_actors'] ?? null,
         ];
         foreach ($switches as $path => $value) {
             if (!is_bool($value)) {

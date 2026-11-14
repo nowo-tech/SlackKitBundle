@@ -54,6 +54,12 @@ follows in 1.4.0).
 - Own-app installations: a click or event whose app secret does not match is verified with the own-app secret of the
   installation named by its (unverified) workspace id, then checked against that installation's Slack app id.
 - `SlackInstallationRevokedEvent::$bindings`: the bindings of the revoked installation (FR-006).
+- Own-app trust (audit PZ-M1): `SlackInteraction::$verifiedByOwnApp` and `SlackInteractionReceivedEvent::$verifiedByOwnApp`;
+  own-app clicks resolve no actor unless `installations.own_app_actors: true`; the optional host port
+  `SlackActorFilterInterface` (`installations.actor_filter`, `SlackActorCandidate` with the installation key and trust
+  source) has the last word on who may act; `ActorResolver::resolve()` takes the installation key.
+- "Add to Slack" shows one translated message per refusal reason (`install.refused.*`, 7 locales; audit PZ-L1) and
+  refuses a workspace with an active own-app installation (`own_app_installed`, PZ-L2).
 
 ### Added (spec 237, T000c: message updates)
 
@@ -85,6 +91,8 @@ follows in 1.4.0).
   API client double-checks the store's answer, button values stay bound to their workspace, actors resolve only from a
   link of the click's workspace, and replies use the click's own installation. Covered by unit tests and a FrankenPHP
   worker test (one kernel, no resetter, two workspaces alternating).
+- An own-app installation without its Slack app id is never tried, and an own-app request must carry that app id
+  (PZ-L5); one HMAC runs whether or not a workspace has an own-app secret (PZ-L4).
 - The OAuth code, state, client secret and tokens never reach a log, an exception message or the session in clear
   (the session keeps the state's record with an account hash only).
 

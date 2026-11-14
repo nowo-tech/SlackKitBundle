@@ -11,10 +11,13 @@ use Nowo\SlackKitBundle\Credentials\SlackInstallationKey;
 use Nowo\SlackKitBundle\Credentials\SlackOwnerScope;
 use Nowo\SlackKitBundle\Event\SlackEventReceivedEvent;
 use Nowo\SlackKitBundle\Event\SlackInstallationRevokedEvent;
+use Nowo\SlackKitBundle\Event\SlackInteractionReceivedEvent;
 use Nowo\SlackKitBundle\Id\SlackTeamId;
 use Nowo\SlackKitBundle\Id\SlackUserId;
 use Nowo\SlackKitBundle\Ingress\EventsHandler;
 use Nowo\SlackKitBundle\Ingress\UnverifiedPayloadPeek;
+use Nowo\SlackKitBundle\Interaction\SlackActorCandidate;
+use Nowo\SlackKitBundle\Interaction\SlackActorFilterInterface;
 use Nowo\SlackKitBundle\Linking\SlackLink;
 use Nowo\SlackKitBundle\Tests\Support\Fake;
 use Nowo\SlackKitBundle\Tests\Support\Ingress;
@@ -117,20 +120,28 @@ final class MultiWorkspaceIngressTest extends TestCase
 
     public function testOwnAppInstallationsVerifyWithTheirOwnSecretOnly(): void
     {
-        $ingress = $this->twoWorkspaces();
+        $ingress = $this->twoWorkspaces(ownAppActors: true);
         $ingress->store->save(Fake::installation(Fake::OTHER_TEAM, Fake::OTHER_TOKEN, null, Fake::OTHER_APP_ID, Fake::OTHER_SECRET));
         $own               = Fake::blockActions('beacon.issue.resolve', $ingress->codec->sign('beacon.issue.resolve', [], SlackTeamId::fromString(Fake::OTHER_TEAM)), Fake::OTHER_TEAM, Fake::OTHER_USER);
         $own['api_app_id'] = Fake::OTHER_APP_ID;
 
         $response = $ingress->controller->interactions($this->interaction($own, Fake::NOW, Fake::OTHER_SECRET));
         self::assertSame(200, $response->getStatusCode(), (string) $response->getContent());
-        self::assertSame('acc-b', $ingress->handler->seen[0]->actor?->accountId, 'an own-app click is bound to its workspace: the actor is trusted');
+        self::assertSame('acc-b', $ingress->handler->seen[0]->actor?->accountId, 'own-app actors opted in: the actor is resolved');
+        self::assertTrue($ingress->handler->seen[0]->verifiedByOwnApp);
         self::assertSame('default:' . Fake::OTHER_TEAM, $ingress->handler->seen[0]->installation->key());
 
         // The own app's secret cannot speak for another workspace (nor for the app's other installations).
         $forged               = Fake::blockActions('beacon.issue.resolve', $ingress->codec->sign('beacon.issue.resolve', [], SlackTeamId::fromString(Fake::TEAM)), Fake::TEAM, Fake::USER);
         $forged['api_app_id'] = Fake::OTHER_APP_ID;
         self::assertSame(401, $ingress->controller->interactions($this->interaction($forged, Fake::NOW, Fake::OTHER_SECRET))->getStatusCode());
+
+        // An own-app request must carry the installation's own app id.
+        $noAppId = Fake::blockActions('demo.ping', $ingress->codec->sign('demo.ping', [], SlackTeamId::fromString(Fake::OTHER_TEAM)), Fake::OTHER_TEAM, Fake::OTHER_USER);
+        unset($noAppId['api_app_id']);
+        $response = $ingress->controller->interactions($this->interaction($noAppId, Fake::NOW, Fake::OTHER_SECRET));
+        self::assertSame(403, $response->getStatusCode());
+        self::assertSame('App mismatch', $response->getContent());
 
         // The distributed app's secret cannot speak for the own-app workspace's app either.
         $ingress->handler->seen = [];
@@ -145,6 +156,94 @@ final class MultiWorkspaceIngressTest extends TestCase
         $again               = Fake::blockActions('demo.ping', $ingress->codec->sign('demo.ping', [], SlackTeamId::fromString(Fake::OTHER_TEAM)), Fake::OTHER_TEAM, Fake::OTHER_USER);
         $again['api_app_id'] = Fake::OTHER_APP_ID;
         self::assertSame(401, $ingress->controller->interactions($this->interaction($again, Fake::NOW, Fake::OTHER_SECRET))->getStatusCode());
+    }
+
+    /**
+     * Audit PZ-M1: whoever holds an own-app secret (pasted by a tenant admin) can sign any member id. By default such a
+     * click resolves no actor, like a resolver-secret click (FS-M1); the flag tells handlers and listeners.
+     */
+    public function testOwnAppClicksHaveNoActorUnlessOptedIn(): void
+    {
+        $ingress = $this->twoWorkspaces();
+        $ingress->identities->saveLink(new SlackLink('victim-of-org-a', SlackTeamId::fromString(Fake::OTHER_TEAM), SlackUserId::fromString('U0000000V'), new DateTimeImmutable('@1'), new DateTimeImmutable('@1')));
+        $ingress->store->save(Fake::installation(Fake::OTHER_TEAM, Fake::OTHER_TOKEN, null, Fake::OTHER_APP_ID, Fake::OTHER_SECRET));
+
+        $forged               = Fake::blockActions('beacon.issue.resolve', $ingress->codec->sign('beacon.issue.resolve', ['i' => 'issue-of-org-a'], SlackTeamId::fromString(Fake::OTHER_TEAM)), Fake::OTHER_TEAM, 'U0000000V');
+        $forged['api_app_id'] = Fake::OTHER_APP_ID;
+        $response             = $ingress->controller->interactions($this->interaction($forged, Fake::NOW, Fake::OTHER_SECRET));
+        self::assertSame(403, $response->getStatusCode(), 'no actor: a handler that needs one is never called');
+        self::assertSame([], $ingress->handler->seen);
+        $received = $ingress->events->of(SlackInteractionReceivedEvent::class);
+        self::assertTrue($received[0]->verifiedByOwnApp);
+        self::assertTrue($received[0]->interaction?->verifiedByOwnApp);
+        self::assertNull($received[0]->interaction->actor);
+
+        $ping               = Fake::blockActions('demo.ping', $ingress->codec->sign('demo.ping', [], SlackTeamId::fromString(Fake::OTHER_TEAM)), Fake::OTHER_TEAM, 'U0000000V');
+        $ping['api_app_id'] = Fake::OTHER_APP_ID;
+        self::assertSame(200, $ingress->controller->interactions($this->interaction($ping, Fake::NOW, Fake::OTHER_SECRET))->getStatusCode());
+        self::assertNull($ingress->anonymousHandler->seen[0]->actor, 'an anonymous-safe handler still runs, without an actor');
+        self::assertTrue($ingress->anonymousHandler->seen[0]->verifiedByOwnApp);
+
+        // A Slack-signed click of the same member keeps its actor.
+        $slack    = Fake::blockActions('beacon.issue.resolve', $ingress->codec->sign('beacon.issue.resolve', [], SlackTeamId::fromString(Fake::TEAM)), Fake::TEAM, Fake::USER);
+        $response = $ingress->controller->interactions($this->interaction($slack));
+        self::assertSame(200, $response->getStatusCode());
+        $seen = $ingress->handler->seen;
+        self::assertCount(1, $seen);
+        self::assertFalse($seen[0]->verifiedByOwnApp);
+        self::assertSame('acc-a', $seen[0]->actor?->accountId);
+    }
+
+    /**
+     * Audit PZ-M1 (c): with own-app actors on, the host filter sees the installation and the trust source and can
+     * limit actors to the accounts of the scopes bound to that installation.
+     */
+    public function testTheActorFilterSeesTheInstallationAndTheTrustSource(): void
+    {
+        $filter = new class implements SlackActorFilterInterface {
+            /** @var list<SlackActorCandidate> */
+            public array $seen = [];
+
+            public function mayAct(SlackActorCandidate $candidate): bool
+            {
+                $this->seen[] = $candidate;
+
+                // Only accounts of the scope bound to the own-app installation.
+                return !$candidate->verifiedByOwnApp || $candidate->accountId === 'acc-b';
+            }
+        };
+        $ingress = $this->twoWorkspaces(ownAppActors: true, filter: $filter);
+        $ingress->identities->saveLink(new SlackLink('victim-of-org-a', SlackTeamId::fromString(Fake::OTHER_TEAM), SlackUserId::fromString('U0000000V'), new DateTimeImmutable('@1'), new DateTimeImmutable('@1')));
+        $ingress->store->save(Fake::installation(Fake::OTHER_TEAM, Fake::OTHER_TOKEN, null, Fake::OTHER_APP_ID, Fake::OTHER_SECRET));
+
+        $forged               = Fake::blockActions('beacon.issue.resolve', $ingress->codec->sign('beacon.issue.resolve', [], SlackTeamId::fromString(Fake::OTHER_TEAM)), Fake::OTHER_TEAM, 'U0000000V');
+        $forged['api_app_id'] = Fake::OTHER_APP_ID;
+        self::assertSame(403, $ingress->controller->interactions($this->interaction($forged, Fake::NOW, Fake::OTHER_SECRET))->getStatusCode(), 'the victim of another scope is filtered out');
+
+        $own               = Fake::blockActions('beacon.issue.resolve', $ingress->codec->sign('beacon.issue.resolve', [], SlackTeamId::fromString(Fake::OTHER_TEAM)), Fake::OTHER_TEAM, Fake::OTHER_USER);
+        $own['api_app_id'] = Fake::OTHER_APP_ID;
+        self::assertSame(200, $ingress->controller->interactions($this->interaction($own, Fake::NOW, Fake::OTHER_SECRET))->getStatusCode());
+        self::assertSame('acc-b', $ingress->handler->seen[0]->actor?->accountId);
+
+        self::assertSame('victim-of-org-a', $filter->seen[0]->accountId);
+        self::assertTrue($filter->seen[0]->verifiedByOwnApp);
+        self::assertSame('default:' . Fake::OTHER_TEAM, $filter->seen[0]->installation?->key());
+        self::assertSame(Fake::OTHER_TEAM, $filter->seen[0]->team->value);
+        self::assertSame('U0000000V', $filter->seen[0]->user->value);
+    }
+
+    /**
+     * Audit PZ-L5: an own-app installation without its Slack app id is never verified (fails closed).
+     */
+    public function testOwnAppWithoutAppIdIsNeverTried(): void
+    {
+        $ingress = $this->twoWorkspaces();
+        $ingress->store->save(Fake::installation(Fake::OTHER_TEAM, Fake::OTHER_TOKEN, null, null, Fake::OTHER_SECRET));
+        $p               = Fake::blockActions('demo.ping', $ingress->codec->sign('demo.ping', [], SlackTeamId::fromString(Fake::OTHER_TEAM)), Fake::OTHER_TEAM, Fake::OTHER_USER);
+        $p['api_app_id'] = 'AANYTHING1';
+
+        self::assertSame(401, $ingress->controller->interactions($this->interaction($p, Fake::NOW, Fake::OTHER_SECRET))->getStatusCode());
+        self::assertSame([], $ingress->anonymousHandler->seen);
     }
 
     public function testOwnAppEventsAndSignatureReplayAndSkew(): void
@@ -228,9 +327,9 @@ final class MultiWorkspaceIngressTest extends TestCase
         self::assertNull(UnverifiedPayloadPeek::teamId('[1]', false));
     }
 
-    private function twoWorkspaces(): Ingress
+    private function twoWorkspaces(bool $ownAppActors = false, ?SlackActorFilterInterface $filter = null): Ingress
     {
-        $ingress = new Ingress();
+        $ingress = new Ingress(ownAppActors: $ownAppActors, actorFilter: $filter);
         $ingress->store->save(Fake::installation(Fake::OTHER_TEAM, Fake::OTHER_TOKEN));
         $ingress->identities->saveLink(new SlackLink('acc-a', SlackTeamId::fromString(Fake::TEAM), SlackUserId::fromString(Fake::USER), new DateTimeImmutable('@1'), new DateTimeImmutable('@1')));
         $ingress->identities->saveLink(new SlackLink('acc-b', SlackTeamId::fromString(Fake::OTHER_TEAM), SlackUserId::fromString(Fake::OTHER_USER), new DateTimeImmutable('@1'), new DateTimeImmutable('@1')));
