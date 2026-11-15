@@ -17,6 +17,7 @@
   - [Account resolver](#account-resolver)
   - [The account card and its routes](#the-account-card-and-its-routes)
   - [Linker API](#linker-api)
+- [Identities per workspace and linking from a click (1.4)](#identities-per-workspace-and-linking-from-a-click-14)
 - [Settings section and Test connection](#settings-section-and-test-connection)
 - [Installation stores](#installation-stores)
   - [Testing your installation store](#testing-your-installation-store)
@@ -367,6 +368,69 @@ link's current Slack id, the workspace and `c` all match and the account is acti
 When the account is disabled or erased, call `unlink()` (or remove the link): actors already require an active
 account.
 
+## Identities per workspace and linking from a click (1.4)
+
+A person can hold **one Slack identity per workspace** (spec 237 FR-010). The actor of a click is the account linked
+in **the click's workspace**, verified and active; a click whose workspace is not the installation's never gets one.
+Handlers that do not need an actor (`requiresActor: false`) are the only ones that run without one.
+
+**Linking from a click.** With `linking.from_click.enabled`, an unlinked member who clicks a button that needs an actor
+gets an ephemeral *Link my account* button. The link is signed, single use, valid 10 minutes and names the workspace,
+the member and the installation. Opening it needs the host session (the firewall asks to sign in first); the page
+shows the workspace and the member's Slack display name, and *Confirm* links the identity when:
+
+- the member's e-mail, read with `users.info` through that installation (`users:read.email`), is a **verified** e-mail
+  of the signed-in account (your `SlackVerifiedEmailCheckerInterface`); an installation may opt in to
+  `allowUnverifiedLinkConfirm` (off by default; warn the admin: a forwarded link could then be confirmed by anyone);
+- no other account holds that identity verified (an unverified claim yields only to an e-mail-proven link);
+- the account has no other identity in that workspace (unlink it first).
+
+The member then gets a DM "Your Slack account in <workspace> is now linked to <account>. Not you? Unlink it." with a
+button to `manage_route`. Links are never offered for clicks verified with a host-resolved or own-app secret, nor for
+legacy values: their member id may be chosen by whoever holds the secret.
+
+**Standard Symfony host:** an entity `SlackIdentity` (account, team id, Slack user id, linked at, source) with a unique
+(team id, Slack user id) and (account, team id), a repository implementing `SlackIdentityLinksInterface`, and your user
+provider's verified e-mail as `SlackVerifiedEmailCheckerInterface`:
+
+```php
+final readonly class VerifiedEmails implements SlackVerifiedEmailCheckerInterface
+{
+    public function isVerifiedEmailOf(SlackVerifiedEmailCheck $check): bool
+    {
+        $user = $this->users->find($check->accountId);
+
+        return $user !== null && $user->isEmailVerified() && mb_strtolower($user->getEmail()) === $check->email;
+    }
+}
+```
+
+```yaml
+nowo_slack_kit:
+    linking:
+        enabled: true
+        identity_store: App\Slack\SlackIdentityRepository   # SlackIdentityLinksInterface
+        account_resolver: App\Slack\CurrentAccount
+        from_click:
+            enabled: true
+            email_checker: App\Slack\VerifiedEmails
+            manage_route: app_account_integrations
+```
+
+```twig
+{% for identity in nowo_slack_kit_identities() ?? [] %}
+    {{ identity.team_id }} · {{ identity.slack_user_id }} · {{ identity.linked_at|date }}
+    {{ include('@NowoUiKitBundle/partials/_action.html.twig', {action: identity.unlink}) }}
+{% endfor %}
+```
+
+**DDD / hexagonal host:** the same two ports in infrastructure (XML mapping, ids only); validate the store with
+`SlackIdentityLinksContractTestCase`. Use `ClickLinkerInterface` (`offer()`, `preview()`, `confirm()`, `linksOf()`,
+`unlinkIn()`) from your own controllers if you do not want the bundle's pages, and react to
+`SlackIdentityLinkedEvent` / `SlackAccountUnlinkedEvent` (ids only).
+
+Never build an actor from a raw payload or from `event.user`: the only actor is `$interaction->actor`.
+
 ## Settings section and Test connection
 
 With `credentials.store: instance_settings` the InstanceSettings admin gets a **Slack** section: bot token (`xoxb-`
@@ -658,6 +722,7 @@ recipient opens a DM first. The `ChatMessage` subject becomes the fallback text 
 | `SlackLinkReleasedEvent` | An unverified link yielded (holder, claimant, Slack id, reason `expired` / `claimed_by_email`) |
 | `SlackConfirmationRateLimitedEvent` | A linking limiter refused (account id, limiter) |
 | `SlackInstallationRevokedEvent` | `app_uninstalled` / `tokens_revoked`, once per installation, with its `bindings` (1.3) |
+| `SlackIdentityLinkedEvent` | An identity was linked from a click (account, team, member, installation, e-mail matched) (1.4) |
 | `SlackInstallationCompletedEvent` | "Add to Slack" saved and bound an installation (installation, scope, account id, re-install flag) |
 | `SlackInstallationUnhealthyEvent` | Repeated auth errors (at most every 10 min per installation) |
 | `SlackEventsRateLimitedEvent` | `app_rate_limited` callback |
@@ -671,6 +736,7 @@ No event carries a token, a signature or a raw body.
 | `nowo_slack_kit_ingress_url(kind = 'interactions', app = null)` | Absolute URL of the interactions or events endpoint (per app when `app` is given) |
 | `nowo_slack_kit_link_card()` | View data of the account card (`status`, `slack_user_id`, `claim_form`, `actions`), or `null` |
 | `nowo_slack_kit_install_action(scope_type, scope_id, app = null)` | The "Add to Slack" UiKit `Action` (POST, CSRF) for a scope, or `null` (flow off, nobody signed in, authoriser refuses) |
+| `nowo_slack_kit_identities()` | The signed-in account's identities, one per workspace, each with its *Unlink* action (1.4), or `null` |
 | `nowo_slack_kit_install_redirect_url()` | Absolute OAuth redirect URL to register in the Slack app, or `null` when the flow is off |
 
 ## Using it from a DDD / hexagonal application

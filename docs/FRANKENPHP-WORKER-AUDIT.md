@@ -3,9 +3,9 @@
 | Field | Value |
 |-------|-------|
 | Package | `nowo-tech/slack-kit-bundle` (`symfony-bundle`) |
-| Audited revision | `1.3.0` (Unreleased; first audit `1.0.0`) |
+| Audited revision | `1.4.0` (Unreleased; first audit `1.0.0`) |
 | Audit date | 2026-11-05, refreshed 2026-11-12 and 2026-11-14 (spec 237, REQ-RUNTIME-002) |
-| Worker test | [`MemoryStoreWorkerTest`](#worker-test-req-runtime-002): 1,000 requests through `http_kernel`, two workspaces; `MultiWorkspaceWorkerTest` (1.3): 300 signed clicks from two workspaces, one kernel, no resetter |
+| Worker test | [`MemoryStoreWorkerTest`](#worker-test-req-runtime-002): 1,000 requests through `http_kernel`, two workspaces; `MultiWorkspaceWorkerTest` (1.3): 300 signed clicks from two workspaces, one kernel, no resetter; `ClickLinkFlowTest::testAlternatingAccountsInOneKernel` (1.4): two accounts link members in turn, one kernel, no resetter |
 | Method | Manual review of every file under `src/`; PHPStan with `nowo-tech/phpstan-frankenphp` (`ruleset-classic`, `ruleset-worker-strict`, `ruleset-hardening`); Igor (`composer igor`); unit tests of `ReplyDispatcher::reset()` and `InMemoryInstallationStore::reset()`; kernel tests with consecutive requests on one container; demo run in worker mode |
 | **Verdict** | ✅ **Viable** — services are stateless (`final readonly`) except the reply buffer (filled and flushed within one request, reset by `kernel.reset`), the in-memory test store (restored at every boundary since 1.2.1) and the route loader's load-once flag; credentials are read from the store on every call and never memoised |
 
@@ -63,6 +63,7 @@ in Messenger consumers started with `--no-reset`, and in long-running console co
 | `SlackKitRouteLoader` | load-once flag at router warm-up | ✅ (`@igor-ignore` with reason) |
 | `SlackKitTransportFactory`, `SlackKitTransport`, `RateLimitRetryMiddleware` | `readonly` | ✅ |
 | `ResponseUrlClient`, `SlackOAuthClient`, `InstallController`, `InstallStateStore` (1.3) | `readonly`; the install state lives in the session and a lock, never in the service | ✅ |
+| `ClickLinker`, `ClickLinkSigner`, `ClickLinkController` (1.4) | `readonly`; single use in the lock store, limiter in the cache pool, identities in the host store | ✅ |
 | `InMemoryInstallationBindingStore` (1.3, `binding_store: memory`) | array of bindings (tests, demo) | ✅ (same boundaries as `InMemoryInstallationStore`, `kernel.reset`) |
 
 ## Worker test (REQ-RUNTIME-002)

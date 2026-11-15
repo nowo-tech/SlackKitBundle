@@ -58,6 +58,8 @@ per-request buffer (deferred Slack answers) is flushed on `kernel.terminate` and
 - ✅ **Several workspaces (1.3)** — installations keyed by app, enterprise and workspace, owner-scope bindings,
   "Add to Slack" (OAuth v2 with a host authoriser and single-use state), own-app installations with their own signing
   secret, uninstall / token revocation once per installation; a workspace never acts, reads or answers for another.
+- ✅ **Identities per workspace (1.4)** — one Slack identity per workspace per account, linked from a click with a
+  signed single-use link, a verified e-mail match by default and a confirmation DM; actors per workspace.
 - ✅ **Message updates (1.3)** — rebuild the clicked message without its spent buttons plus a context line
   (`chat.update`), or answer through the click's `response_url`.
 - ✅ **Credentials** — installation store interface; InstanceSettings-backed store (encrypted bot token and signing
