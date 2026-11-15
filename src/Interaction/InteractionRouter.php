@@ -11,6 +11,7 @@ use Nowo\SlackKitBundle\Event\SlackActionHandledEvent;
 use Nowo\SlackKitBundle\Id\SlackChannelId;
 use Nowo\SlackKitBundle\Id\SlackTeamId;
 use Nowo\SlackKitBundle\Id\SlackUserId;
+use Nowo\SlackKitBundle\Linking\ClickLinkerInterface;
 use Nowo\SlackKitBundle\NowoSlackKitBundle;
 use Nowo\SlackKitBundle\Security\SlackSecret;
 use Psr\Container\ContainerInterface;
@@ -47,6 +48,7 @@ final readonly class InteractionRouter
      * @param TranslatorInterface|null $translator translator of the built-in answers
      * @param string $defaultLocale locale of built-in answers when the clicker has no account
      * @param LoggerInterface $logger PSR-3 logger
+     * @param ClickLinkerInterface|null $links link-from-click (1.4): an unlinked clicker gets a link to link their account
      */
     public function __construct(
         private ContainerInterface $handlers,
@@ -59,6 +61,7 @@ final readonly class InteractionRouter
         private ?TranslatorInterface $translator = null,
         private string $defaultLocale = 'en',
         private LoggerInterface $logger = new NullLogger(),
+        private ?ClickLinkerInterface $links = null,
     ) {
     }
 
@@ -146,6 +149,13 @@ final readonly class InteractionRouter
             return new Response('Unsupported action', Response::HTTP_BAD_REQUEST);
         }
         if ($this->requiresActor[$interaction->actionId] && !$interaction->actor instanceof SlackActor) {
+            $offer = $this->links?->offer($interaction);
+            if ($offer instanceof SlackMessage) {
+                $this->replies->schedule($interaction, (new SlackInteractionReply(Response::HTTP_FORBIDDEN, self::LINK_REQUIRED))->withEphemeral($offer));
+
+                return new Response(self::LINK_REQUIRED, Response::HTTP_FORBIDDEN, ['Content-Type' => 'text/plain; charset=UTF-8']);
+            }
+
             return $this->refuse($interaction, 'interaction.link_required', self::LINK_REQUIRED, null);
         }
 

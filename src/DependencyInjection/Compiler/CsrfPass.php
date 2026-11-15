@@ -6,6 +6,7 @@ namespace Nowo\SlackKitBundle\DependencyInjection\Compiler;
 
 use LogicException;
 use Nowo\SlackKitBundle\Controller\AccountLinkController;
+use Nowo\SlackKitBundle\Controller\ClickLinkController;
 use Nowo\SlackKitBundle\Controller\TestConnectionController;
 use Nowo\SlackKitBundle\Install\InstallController;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
@@ -24,7 +25,7 @@ final class CsrfPass implements CompilerPassInterface
      */
     public function process(ContainerBuilder $container): void
     {
-        if (!$container->hasDefinition(TestConnectionController::class) && !$container->hasDefinition(AccountLinkController::class) && !$container->hasDefinition(InstallController::class)) {
+        if (!$container->hasDefinition(TestConnectionController::class) && !$container->hasDefinition(AccountLinkController::class) && !$container->hasDefinition(InstallController::class) && !$container->hasDefinition(ClickLinkController::class)) {
             return;
         }
         $disabled = $container->hasParameter('form.type_extension.csrf.enabled') && $container->getParameter('form.type_extension.csrf.enabled') === false;

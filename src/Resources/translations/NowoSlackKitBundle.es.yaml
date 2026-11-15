@@ -46,11 +46,22 @@ link:
         confirmation_sent: "Confirmación enviada: pulsa Confirmar en el mensaje directo de Slack."
         confirmation_failed: "No se pudo enviar la confirmación. Revisa el ID de Slack e inténtalo de nuevo."
         unlinked: "Tu cuenta de Slack está desvinculada."
+        linked: "Tu cuenta de Slack está vinculada para este espacio de trabajo."
+        link_expired: "Este enlace de Slack no es válido, ha caducado o ya se usó. Vuelve a pulsar el botón en Slack."
+        email_mismatch: "Tu e-mail de Slack no es un e-mail verificado de esta cuenta, así que se rechazó el vínculo. Entra con la cuenta que corresponde o verifica antes ese e-mail."
+        email_unavailable: "Slack no comparte el e-mail de este miembro, así que no se puede comprobar el vínculo. Consulta a un administrador."
+        already_linked_in_workspace: "Tu cuenta ya está vinculada a otro miembro de Slack en este espacio de trabajo. Desvincúlalo primero."
 slack:
     confirm:
         text: "¿Es esta tu cuenta de Slack? Pulsa Confirmar para vincularla."
         button: "Confirmar"
         linked: "Tu cuenta de Slack está vinculada."
+    link_offer:
+        text: "Vincula tu cuenta para actuar desde Slack. Este enlace es solo para ti y caduca en 10 minutos."
+        button: "Vincular mi cuenta"
+    linked_dm:
+        text: "Tu cuenta de Slack en %team% está ahora vinculada a %account%. ¿No eres tú? Desvincúlala."
+        unlink: "Desvincular"
 interaction:
     link_required: "Primero vincula y confirma tu cuenta de Slack (perfil de la cuenta)."
     button_invalid: "Este botón ya no es válido."
@@ -71,3 +82,8 @@ install:
         invalid_grant: "Slack no devolvió una instalación de bot utilizable. Vuelve a instalarla."
         not_allowed: "Ya no tienes permiso para instalar Slack aquí."
         own_app_installed: "Este espacio de trabajo ya está conectado mediante su propia app de Slack. Elimina esa conexión antes de usar \"Añadir a Slack\"."
+link_click:
+    page_title: "Vincula tu cuenta de Slack"
+    title: "¿Vincular a %name% en %team%?"
+    message: "El miembro de Slack %name% (%id%) del espacio de trabajo %team% actuará como tú al pulsar botones de Slack. Confirma solo si eres tú."
+    confirm: "Confirmar"

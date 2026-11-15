@@ -22,6 +22,9 @@ final class FakeSlackApi
     /** @var array<string, mixed> answer of `oauth.v2.access` (ok:true is added) */
     public array $oauth = [];
 
+    /** @var array<string, mixed> `users.info` profile of every member (`users:read.email` included) */
+    public array $profile = ['display_name' => 'Ana Slack', 'email' => 'admin@example.test'];
+
     /** When set, `oauth.v2.access` answers `ok:false` with this error. */
     public ?string $oauthError = null;
 
@@ -50,11 +53,19 @@ final class FakeSlackApi
         return match ($api) {
             'auth.test'           => Fake::ok(['team' => 'Fake team', 'team_id' => Fake::TEAM, 'user' => 'fakebot', 'user_id' => 'U0000000B', 'bot_id' => 'B00000000']),
             'chat.update'         => Fake::ok(['channel' => Fake::CHANNEL, 'ts' => '1793836800.000100']),
+            'users.info'          => Fake::ok(['user' => ['id' => $this->member($body), 'profile' => $this->profile]]),
             'conversations.open'  => Fake::ok(['channel' => ['id' => Fake::DM]]),
             'chat.postMessage'    => Fake::ok(['channel' => Fake::DM, 'ts' => '1793836800.000100']),
             'users.lookupByEmail' => Fake::ok(['user' => ['id' => Fake::USER]]),
             default               => Fake::ok(),
         };
+    }
+
+    private function member(string $body): string
+    {
+        parse_str($body, $fields);
+
+        return is_string($fields['user'] ?? null) ? $fields['user'] : '';
     }
 
     /**

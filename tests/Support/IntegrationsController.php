@@ -22,7 +22,9 @@ final readonly class IntegrationsController
             '{% for t, ms in app.flashes %}{% for m in ms %}<p class="flash-{{ t }}">{{ m }}</p>{% endfor %}{% endfor %}'
             . "{% set a = nowo_slack_kit_install_action('organization', 'org-1') %}"
             . "{% if a is not null %}{{ include('@NowoUiKitBundle/partials/_action.html.twig', {action: a}) }}{% endif %}"
-            . '<p data-testid="redirect">{{ nowo_slack_kit_install_redirect_url() }}</p>',
+            . '<p data-testid="redirect">{{ nowo_slack_kit_install_redirect_url() }}</p>'
+            . '{% for i in nowo_slack_kit_identities() ?? [] %}<p data-testid="identity">{{ i.team_id }} {{ i.slack_user_id }} {{ i.source }}</p>'
+            . "{{ include('@NowoUiKitBundle/partials/_action.html.twig', {action: i.unlink}) }}{% endfor %}",
         )->render());
     }
 }

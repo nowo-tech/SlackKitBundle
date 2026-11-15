@@ -25,6 +25,7 @@ use function is_string;
 use function json_decode;
 use function max;
 use function min;
+use function trim;
 
 use const JSON_THROW_ON_ERROR;
 
@@ -32,13 +33,13 @@ use const JSON_THROW_ON_ERROR;
  * The Slack Web API client (contract §4): constant base URL, token in the `Authorization` header only, no redirects,
  * idle and total timeouts, a response size cap, typed errors and rate limits that are thrown, never slept on.
  */
-final readonly class SlackApiClient implements SlackApiClientInterface
+final readonly class SlackApiClient implements SlackApiClientInterface, SlackUserDirectoryInterface
 {
     /** The only host the client talks to. */
     public const BASE_URL = 'https://slack.com/api/';
 
     /** Methods that take form arguments; the others take JSON. */
-    public const FORM_METHODS = ['auth.test', 'users.lookupByEmail'];
+    public const FORM_METHODS = ['auth.test', 'users.lookupByEmail', 'users.info'];
 
     /** Default wait when Slack rate limits without `Retry-After`. */
     public const DEFAULT_RETRY_AFTER = 30;
@@ -148,6 +149,29 @@ final readonly class SlackApiClient implements SlackApiClientInterface
         $user = $data['user'] ?? null;
 
         return SlackUserId::tryFrom(is_array($user) ? ($user['id'] ?? null) : null);
+    }
+
+    /**
+     * `users.info` (1.4).
+     */
+    public function userProfile(SlackInstallationKey $installation, SlackUserId $user): SlackUserProfile
+    {
+        $data    = $this->call($installation, 'users.info', ['user' => $user->value]);
+        $member  = is_array($data['user'] ?? null) ? $data['user'] : [];
+        $profile = is_array($member['profile'] ?? null) ? $member['profile'] : [];
+        if (!$user->equals(SlackUserId::tryFrom($member['id'] ?? null))) {
+            throw new SlackApiException('invalid_response');
+        }
+        $name = '';
+        foreach ([$profile['display_name'] ?? null, $profile['real_name'] ?? null, $member['name'] ?? null] as $candidate) {
+            if (is_string($candidate) && trim($candidate) !== '') {
+                $name = trim($candidate);
+                break;
+            }
+        }
+        $email = is_string($profile['email'] ?? null) && trim($profile['email']) !== '' ? trim($profile['email']) : null;
+
+        return new SlackUserProfile($user, $name !== '' ? $name : $user->value, $email, ($member['is_bot'] ?? false) === true, ($member['deleted'] ?? false) === true);
     }
 
     /**

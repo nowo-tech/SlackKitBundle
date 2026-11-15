@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Nowo\SlackKitBundle\Twig;
 
+use DateTimeImmutable;
 use InvalidArgumentException;
 use Nowo\FormKitBundle\Form\CsrfOnlyFormFactory;
 use Nowo\SlackKitBundle\Controller\AccountLinkController;
+use Nowo\SlackKitBundle\Controller\ClickLinkController;
 use Nowo\SlackKitBundle\Credentials\SlackAppRegistry;
 use Nowo\SlackKitBundle\Credentials\SlackOwnerScope;
 use Nowo\SlackKitBundle\Form\SlackUserIdType;
@@ -15,6 +17,7 @@ use Nowo\SlackKitBundle\Install\InstallController;
 use Nowo\SlackKitBundle\Install\SlackInstallAttempt;
 use Nowo\SlackKitBundle\Install\SlackInstallAuthorizerInterface;
 use Nowo\SlackKitBundle\Linking\AccountLinkerInterface;
+use Nowo\SlackKitBundle\Linking\ClickLinkerInterface;
 use Nowo\SlackKitBundle\Linking\SlackAccountResolverInterface;
 use Nowo\SlackKitBundle\Linking\SlackLink;
 use Nowo\SlackKitBundle\NowoSlackKitBundle;
@@ -44,6 +47,7 @@ final class SlackKitTwigExtension extends AbstractExtension
      * @param SlackAppRegistry|null $apps configured apps (null: "Add to Slack" off)
      * @param SlackInstallAuthorizerInterface|null $installAuthorizer who may install for a scope
      * @param SlackAccountResolverInterface|null $installAccounts current account of the install flow
+     * @param ClickLinkerInterface|null $clickLinks several identities per account (1.4; null: off)
      */
     public function __construct(
         private readonly UrlGeneratorInterface $urls,
@@ -54,6 +58,7 @@ final class SlackKitTwigExtension extends AbstractExtension
         private readonly ?SlackAppRegistry $apps = null,
         private readonly ?SlackInstallAuthorizerInterface $installAuthorizer = null,
         private readonly ?SlackAccountResolverInterface $installAccounts = null,
+        private readonly ?ClickLinkerInterface $clickLinks = null,
     ) {
     }
 
@@ -69,7 +74,45 @@ final class SlackKitTwigExtension extends AbstractExtension
             new TwigFunction('nowo_slack_kit_ingress_url', $this->ingressUrl(...)),
             new TwigFunction('nowo_slack_kit_install_action', $this->installAction(...)),
             new TwigFunction('nowo_slack_kit_install_redirect_url', $this->installRedirectUrl(...)),
+            new TwigFunction('nowo_slack_kit_identities', $this->identities(...)),
         ];
+    }
+
+    /**
+     * The signed-in account's Slack identities, one per workspace, each with its *Unlink* POST action (1.4, spec 237
+     * FR-013); null when link-from-click is off or nobody is signed in.
+     *
+     * @return list<array{team_id: string, slack_user_id: string, linked_at: DateTimeImmutable, verified: bool, source: string, unlink: Action}>|null
+     */
+    public function identities(): ?array
+    {
+        $account = $this->accounts?->currentAccountId();
+        if (!$this->clickLinks instanceof ClickLinkerInterface || $account === null || !$this->csrfForms instanceof CsrfOnlyFormFactory) {
+            return null;
+        }
+        $rows = [];
+        foreach ($this->clickLinks->linksOf($account) as $link) {
+            $url    = $this->urls->generate(ClickLinkController::UNLINK, ['team' => $link->team->value]);
+            $rows[] = [
+                'team_id'       => $link->team->value,
+                'slack_user_id' => $link->slackUserId->value,
+                'linked_at'     => $link->verifiedAt ?? $link->claimedAt,
+                'verified'      => $link->isVerified(),
+                'source'        => $link->source,
+                'unlink'        => new Action(
+                    'custom',
+                    new Label('link.action.unlink', NowoSlackKitBundle::TRANSLATION_DOMAIN),
+                    $url,
+                    method: 'POST',
+                    confirm: new Confirm(new Label('link.action.unlink_confirm', NowoSlackKitBundle::TRANSLATION_DOMAIN)),
+                    variant: 'danger',
+                    attributes: ['data-testid' => ClickLinkController::UNLINK . '.' . $link->team->value],
+                    form: $this->csrfForms->createNamed($url, ClickLinkController::UNLINK)->createView(),
+                ),
+            ];
+        }
+
+        return $rows;
     }
 
     /**

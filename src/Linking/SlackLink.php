@@ -20,13 +20,16 @@ final readonly class SlackLink
     /** Claimed by `users.lookupByEmail` with the account's e-mail (proven). */
     public const SOURCE_EMAIL_LOOKUP = 'email_lookup';
 
+    /** Linked from a click in Slack (1.4, spec 237 FR-011). */
+    public const SOURCE_CLICK = 'click';
+
     /**
      * @param string $accountId host account id
      * @param SlackTeamId $team workspace
      * @param SlackUserId $slackUserId member id
      * @param DateTimeImmutable $claimedAt when the id was set
      * @param DateTimeImmutable|null $verifiedAt when the owner confirmed it from Slack
-     * @param string $source {@see self::SOURCE_TYPED} or {@see self::SOURCE_EMAIL_LOOKUP}
+     * @param string $source {@see self::SOURCE_TYPED}, {@see self::SOURCE_EMAIL_LOOKUP} or {@see self::SOURCE_CLICK}
      */
     public function __construct(
         public string $accountId,

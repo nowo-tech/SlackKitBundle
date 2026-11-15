@@ -12,7 +12,8 @@ use Nowo\SlackKitBundle\Linking\SlackLink;
 
 /**
  * Resolves the clicker to an account only when the link exists for that workspace and member, is verified, and the
- * account is active (enabled, not anonymised) — OTHER REQ-SEC-001, contract §6.3. Since 1.3 an optional host filter
+ * account is active (enabled, not anonymised) — OTHER REQ-SEC-001, contract §6.3 — and, since 1.4, when the click's
+ * workspace is the installation's (one identity per workspace, spec 237). Since 1.3 an optional host filter
  * ({@see SlackActorFilterInterface}) sees the installation and how the click was verified, and may refuse.
  */
 final readonly class ActorResolver
@@ -36,6 +37,10 @@ final readonly class ActorResolver
     public function resolve(?SlackTeamId $team, ?SlackUserId $user, ?SlackInstallationKey $installation = null, bool $verifiedByOwnApp = false): ?SlackActor
     {
         if (!$this->identities instanceof SlackIdentityStoreInterface || !$team instanceof SlackTeamId || !$user instanceof SlackUserId) {
+            return null;
+        }
+        // 1.4 (spec 237 FR-014): a click whose workspace is not the installation's never gets an actor.
+        if ($installation?->team instanceof SlackTeamId && !$installation->team->equals($team)) {
             return null;
         }
         $link = $this->identities->findLinkBySlackUser($team, $user);
