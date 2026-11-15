@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.4.0] - 2026-11-15](#140---2026-11-15)
   - [Added (spec 237, T000b: identities per workspace, link from a click)](#added-spec-237-t000b-identities-per-workspace-link-from-a-click)
   - [Changed](#changed)
   - [Security](#security)
@@ -31,6 +32,8 @@ All notable changes to this project are documented here. The format follows
   - [Notes / deviations from contract v1.1](#notes--deviations-from-contract-v11)
 
 ## [Unreleased]
+
+## [1.4.0] - 2026-11-15
 
 Target: **1.4.0** (minor; no breaking change, see [UPGRADING.md](UPGRADING.md#to-140)). Symfony Beacon spec 237,
 task T000b.
@@ -75,6 +78,8 @@ task T000b.
   clicks, nor legacy values. A verified identity of another account is never taken; an unverified claim yields only to
   an e-mail-proven link. Tokens use their own HKDF key, live at most 10 minutes and are claimed once with a lock.
   No e-mail, token or secret reaches the bundle's logs.
+
+[1.4.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.4.0
 
 ## [1.3.0] - 2026-11-14
 
@@ -459,5 +464,5 @@ Decided by the owner on 2026-11-05 so that Beacon's adoption is a no-op:
   (OAuth, 1.1). VarDumper and the profiler show `[redacted]` through `SlackSecret::__debugInfo()`; there is no
   separate caster.
 
-[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.4.0...HEAD
 [1.0.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.0.0
