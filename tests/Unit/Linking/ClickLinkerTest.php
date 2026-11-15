@@ -39,7 +39,10 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use Symfony\Component\Translation\Loader\YamlFileLoader;
+use Symfony\Component\Translation\Translator;
 
+use function dirname;
 use function explode;
 use function json_encode;
 use function str_repeat;
@@ -100,6 +103,24 @@ final class ClickLinkerTest extends TestCase
         self::assertNull($linker->offer($this->click(user: null)));
         $this->identities->saveLink($this->link('acc-z', Fake::TEAM, Fake::USER));
         self::assertNull($linker->offer($this->click()), 'the member is already linked');
+    }
+
+    /**
+     * Beacon Q7: the offer names the configured lifetime, in minutes or seconds, never a fixed "10 minutes".
+     */
+    public function testTheOfferTextUsesTheConfiguredLifetime(): void
+    {
+        $translator = new Translator('en');
+        $translator->addLoader('yaml', new YamlFileLoader());
+        $translator->addResource('yaml', dirname(__DIR__, 3) . '/src/Resources/translations/NowoSlackKitBundle.en.yaml', 'en', 'NowoSlackKitBundle');
+
+        foreach ([120 => '2 minutes', 90 => '90 seconds', 60 => '1 minute.', 600 => '10 minutes'] as $ttl => $expected) {
+            $offer = $this->linker(translator: $translator, ttl: $ttl)->offer($this->click());
+            self::assertInstanceOf(SlackMessage::class, $offer);
+            self::assertStringContainsString('expires in ' . $expected, $offer->text, "ttl {$ttl}");
+        }
+        $offer = $this->linker(translator: $translator, ttl: 120)->offer($this->click());
+        self::assertStringNotContainsString('10 minutes', (string) $offer?->text);
     }
 
     public function testConfirmLinksWithAVerifiedEmailOnceAndNotifiesTheMember(): void
@@ -257,7 +278,7 @@ final class ClickLinkerTest extends TestCase
         self::assertSame('ana@example.test', (new SlackVerifiedEmailCheck('x', ' ANA@example.test '))->email);
     }
 
-    private function linker(int $limit = 50, ?string $manageRoute = 'app_integrations'): ClickLinker
+    private function linker(int $limit = 50, ?string $manageRoute = 'app_integrations', ?Translator $translator = null, int $ttl = 600): ClickLinker
     {
         $urls = $this->createStub(UrlGeneratorInterface::class);
         $urls->method('generate')->willReturnCallback(static fn (string $route, array $params = []): string => $route === 'app_integrations' ? 'https://example.test/integrations' : 'https://example.test/link/' . ($params['token'] ?? ''));
@@ -276,9 +297,10 @@ final class ClickLinkerTest extends TestCase
             $manageRoute,
             false,
             $this->events,
-            null,
+            $translator,
             'en',
             $this->logger,
+            $ttl,
         );
     }
 

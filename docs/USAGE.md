@@ -386,7 +386,9 @@ shows the workspace and the member's Slack display name, and *Confirm* links the
 - the account has no other identity in that workspace (unlink it first).
 
 The member then gets a DM "Your Slack account in <workspace> is now linked to <account>. Not you? Unlink it." with a
-button to `manage_route`. Links are never offered for clicks verified with a host-resolved or own-app secret, nor for
+button to `manage_route`. `<account>` is `SlackIdentityLinksInterface::accountLabel()`: return the account's display
+name, **never an e-mail** (the DM is readable by whoever reads that Slack member's messages). The offer text names the
+configured `linking.from_click.ttl` (in minutes, or seconds when it is not a whole number of minutes). Links are never offered for clicks verified with a host-resolved or own-app secret, nor for
 legacy values: their member id may be chosen by whoever holds the secret.
 
 **Standard Symfony host:** an entity `SlackIdentity` (account, team id, Slack user id, linked at, source) with a unique

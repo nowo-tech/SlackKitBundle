@@ -57,7 +57,8 @@ slack:
         button: "Confirm"
         linked: "Your Slack account is linked."
     link_offer:
-        text: "Link your account to act from Slack. This link is only for you and expires in 10 minutes."
+        text_minutes: "{1} Link your account to act from Slack. This link is only for you and expires in 1 minute.|]1,Inf[ Link your account to act from Slack. This link is only for you and expires in %count% minutes."
+        text_seconds: "Link your account to act from Slack. This link is only for you and expires in %count% seconds."
         button: "Link my account"
     linked_dm:
         text: "Your Slack account in %team% is now linked to %account%. Not you? Unlink it."

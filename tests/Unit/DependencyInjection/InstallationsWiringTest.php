@@ -80,6 +80,7 @@ final class InstallationsWiringTest extends TestCase
         self::assertSame('lock.factory', (string) $linker->getArgument(6));
         self::assertSame('app_integrations', $linker->getArgument(10));
         self::assertSame(300, $container->getDefinition(ClickLinkSigner::class)->getArgument(2));
+        self::assertSame(300, $linker->getArgument(16), 'the offer names the same lifetime as the token');
         self::assertSame(ClickLinker::class, (string) $container->getAlias(ClickLinkerInterface::class));
         self::assertTrue($container->getAlias(SlackUserDirectoryInterface::class)->isPublic());
         self::assertSame(ClickLinkerInterface::class, (string) $container->getDefinition(InteractionRouter::class)->getArgument('$links'));

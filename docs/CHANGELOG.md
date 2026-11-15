@@ -53,6 +53,8 @@ task T000b.
 - `SlackUserDirectoryInterface::userProfile()` (`users.info`, public alias) and `SlackUserProfile`;
   `SlackInstallation::$allowUnverifiedLinkConfirm`; `SlackLink::SOURCE_CLICK`; `LinkResult` cases `Linked`,
   `LinkExpired`, `EmailMismatch`, `EmailUnavailable`, `AlreadyLinkedInWorkspace`; translations in 7 locales.
+- The "Link my account" offer names the configured link lifetime (`linking.from_click.ttl`, in minutes or seconds),
+  pluralised in the 7 locales.
 
 ### Changed
 

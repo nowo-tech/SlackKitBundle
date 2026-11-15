@@ -622,6 +622,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
             new Reference('translator', ContainerInterface::NULL_ON_INVALID_REFERENCE),
             $config['default_locale'],
             new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE),
+            $click['ttl'],
         ]))->addTag('monolog.logger', ['channel' => 'slack']));
         $container->setAlias(ClickLinkerInterface::class, ClickLinker::class)->setPublic(true);
         $container->setAlias(SlackUserDirectoryInterface::class, SlackApiClient::class)->setPublic(true);

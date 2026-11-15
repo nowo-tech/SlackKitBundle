@@ -33,6 +33,7 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 use function hash;
+use function intdiv;
 use function max;
 
 /**
@@ -66,6 +67,7 @@ final readonly class ClickLinker implements ClickLinkerInterface
      * @param TranslatorInterface|null $translator translator of the Slack-side texts
      * @param string $defaultLocale locale of the Slack-side texts
      * @param LoggerInterface $logger PSR-3 logger (ids and codes only)
+     * @param int $ttl lifetime of the link in seconds (`linking.from_click.ttl`), named in the offer text
      */
     public function __construct(
         private SlackIdentityLinksInterface $identities,
@@ -84,6 +86,7 @@ final readonly class ClickLinker implements ClickLinkerInterface
         private ?TranslatorInterface $translator = null,
         private string $defaultLocale = 'en',
         private LoggerInterface $logger = new NullLogger(),
+        private int $ttl = ClickLinkSigner::MAX_TTL,
     ) {
     }
 
@@ -102,8 +105,11 @@ final readonly class ClickLinker implements ClickLinkerInterface
         if ($holder instanceof SlackLink && $holder->isVerified()) {
             return null;
         }
-        $url  = $this->urls->generate(ClickLinkController::PAGE, ['token' => $this->signer->issue($interaction->installation, $team, $user)], UrlGeneratorInterface::ABSOLUTE_URL);
-        $text = $this->trans('slack.link_offer.text', []);
+        $url = $this->urls->generate(ClickLinkController::PAGE, ['token' => $this->signer->issue($interaction->installation, $team, $user)], UrlGeneratorInterface::ABSOLUTE_URL);
+        // Beacon Q7: the configured lifetime, in minutes when it is a whole number of minutes, else in seconds.
+        $text = $this->ttl % 60 === 0
+            ? $this->trans('slack.link_offer.text_minutes', ['%count%' => (string) intdiv($this->ttl, 60)])
+            : $this->trans('slack.link_offer.text_seconds', ['%count%' => (string) $this->ttl]);
 
         return new SlackMessage($text, [Blocks::section($text), Blocks::actions([Blocks::linkButton($this->trans('slack.link_offer.button', []), $url, self::OPEN_ACTION, $this->allowHttp)])]);
     }

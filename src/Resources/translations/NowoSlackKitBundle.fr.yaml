@@ -57,7 +57,8 @@ slack:
         button: "Confirmer"
         linked: "Votre compte Slack est lié."
     link_offer:
-        text: "Liez votre compte pour agir depuis Slack. Ce lien n'est que pour vous et expire dans 10 minutes."
+        text_minutes: "{1} Liez votre compte pour agir depuis Slack. Ce lien n'est que pour vous et expire dans 1 minute.|]1,Inf[ Liez votre compte pour agir depuis Slack. Ce lien n'est que pour vous et expire dans %count% minutes."
+        text_seconds: "Liez votre compte pour agir depuis Slack. Ce lien n'est que pour vous et expire dans %count% secondes."
         button: "Lier mon compte"
     linked_dm:
         text: "Votre compte Slack dans %team% est désormais lié à %account%. Ce n'est pas vous ? Supprimez le lien."

@@ -57,7 +57,8 @@ slack:
         button: "Bestätigen"
         linked: "Ihr Slack-Konto ist verknüpft."
     link_offer:
-        text: "Verknüpfe dein Konto, um in Slack zu handeln. Dieser Link gilt nur für dich und läuft in 10 Minuten ab."
+        text_minutes: "{1} Verknüpfe dein Konto, um in Slack zu handeln. Dieser Link gilt nur für dich und läuft in 1 Minute ab.|]1,Inf[ Verknüpfe dein Konto, um in Slack zu handeln. Dieser Link gilt nur für dich und läuft in %count% Minuten ab."
+        text_seconds: "Verknüpfe dein Konto, um in Slack zu handeln. Dieser Link gilt nur für dich und läuft in %count% Sekunden ab."
         button: "Mein Konto verknüpfen"
     linked_dm:
         text: "Dein Slack-Konto in %team% ist jetzt mit %account% verknüpft. Nicht du? Löse die Verknüpfung."

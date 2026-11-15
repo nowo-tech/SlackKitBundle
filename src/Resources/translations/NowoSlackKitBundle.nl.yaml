@@ -57,7 +57,8 @@ slack:
         button: "Bevestigen"
         linked: "Je Slack-account is gekoppeld."
     link_offer:
-        text: "Koppel je account om vanuit Slack te handelen. Deze link is alleen voor jou en verloopt over 10 minuten."
+        text_minutes: "{1} Koppel je account om vanuit Slack te handelen. Deze link is alleen voor jou en verloopt over 1 minuut.|]1,Inf[ Koppel je account om vanuit Slack te handelen. Deze link is alleen voor jou en verloopt over %count% minuten."
+        text_seconds: "Koppel je account om vanuit Slack te handelen. Deze link is alleen voor jou en verloopt over %count% seconden."
         button: "Mijn account koppelen"
     linked_dm:
         text: "Je Slack-account in %team% is nu gekoppeld aan %account%. Ben jij dit niet? Ontkoppel het."
