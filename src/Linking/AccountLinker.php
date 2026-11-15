@@ -28,6 +28,8 @@ use Psr\Clock\ClockInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\SharedLockInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
@@ -58,6 +60,8 @@ final readonly class AccountLinker implements AccountLinkerInterface
      * @param LoggerInterface $logger PSR-3 logger (ids and codes only)
      * @param LegacyValuePolicy|null $legacy while its window is open, signed confirmations without `c` (issued before
      *                                       adoption) are still accepted; afterwards `c` is required
+     * @param LockFactory|null $locks member locks shared with link-from-click (1.4, audit R2-D1;
+     *                                `ingress.replay_lock_factory`)
      */
     public function __construct(
         private SlackIdentityStoreInterface $identities,
@@ -75,6 +79,7 @@ final readonly class AccountLinker implements AccountLinkerInterface
         private string $defaultLocale = 'en',
         private LoggerInterface $logger = new NullLogger(),
         private ?LegacyValuePolicy $legacy = null,
+        private ?LockFactory $locks = null,
     ) {
     }
 
@@ -199,7 +204,12 @@ final readonly class AccountLinker implements AccountLinkerInterface
         }
 
         if (!$link->isVerified()) {
-            $this->identities->saveLink($link->verified($this->now()));
+            try {
+                $this->identities->saveLink($link->verified($this->now()));
+            } catch (SlackIdentityConflictException) {
+                // Another account took the pair meanwhile (1.4 store contract, audit R2-D1).
+                return SlackInteractionReply::forbidden('Confirmation refused')->withEphemeral(SlackMessage::plain($this->trans('slack.confirm.refused', null)));
+            }
             $this->events?->dispatch(new SlackAccountVerifiedEvent($link->accountId, $link->team->value, $link->slackUserId->value));
         }
 
@@ -219,7 +229,25 @@ final readonly class AccountLinker implements AccountLinkerInterface
         return LinkResult::Unlinked;
     }
 
+    /**
+     * {@see self::claimPair()} under the member lock shared with link-from-click (1.4, audit R2-D1).
+     */
     private function take(string $accountId, SlackTeamId $team, SlackUserId $user, bool $proven): LinkResult
+    {
+        $lock = $this->locks?->createLock(ClickLinker::pairLockKey($this->installation->app, $team, $user), ClickLinker::DEFAULT_LOCK_TTL);
+        if ($lock instanceof SharedLockInterface && !$lock->acquire(false)) {
+            return LinkResult::Unavailable;
+        }
+        try {
+            return $this->claimPair($accountId, $team, $user, $proven);
+        } catch (SlackIdentityConflictException) {
+            return LinkResult::InUse; // Another account holds the pair (1.4 store contract).
+        } finally {
+            $lock?->release();
+        }
+    }
+
+    private function claimPair(string $accountId, SlackTeamId $team, SlackUserId $user, bool $proven): LinkResult
     {
         $holder = $this->identities->findLinkBySlackUser($team, $user);
         if ($holder instanceof SlackLink && $holder->accountId === $accountId) {

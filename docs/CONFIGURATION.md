@@ -19,6 +19,7 @@ security switches must be literal booleans (REQ-SF-006).
   - [Legacy unsigned values: legacy_value_key, legacy_action_map, legacy_until](#legacy-unsigned-values-legacy_value_key-legacy_action_map-legacy_until)
   - [Link confirmations without c](#link-confirmations-without-c)
 - [linking](#linking)
+  - [from_click](#from_click)
 - [test_connection](#test_connection)
 - [rate_limit](#rate_limit)
 - [notifier](#notifier)
@@ -98,6 +99,14 @@ nowo_slack_kit:
         email_lookup_per_account: { limit: 5,  interval: '1 hour' }
         confirmation_per_account: { limit: 3,  interval: '1 hour' }
         confirmation_per_target:  { limit: 3,  interval: '1 hour' }
+        from_click:                   # 1.4: identities per workspace, linked from a click
+            enabled: false            # literal boolean; needs identity_store implementing SlackIdentityLinksInterface
+            email_checker: null       # service id implementing SlackVerifiedEmailCheckerInterface (required when enabled)
+            ttl: 600                  # link lifetime, 60..600 s
+            manage_route: null        # host page listing identities ("not you? Unlink" in the DM; where actions end)
+            layout: null              # UiKit layout of the confirm page (null: nowo_ui_layout.admin)
+            allow_http: false         # http:// links in Slack messages (development and tests only)
+            rate_limit: { limit: 10, interval: '1 hour' }   # previews + confirmations per account
 
     test_connection:
         enabled: true                 # only with the instance_settings store
@@ -355,6 +364,15 @@ one worker) fails it unless `kernel.debug` is true or the environment is `test` 
 IL-L2). The *Test connection* limiter keeps `cache.app` whatever this option says. `limiter` keys `acc:<account>` and
 `slack:<team>:<user>` for the per-target confirmation limit). A refusal sends nothing, returns `RATE_LIMITED` and
 dispatches `SlackConfirmationRateLimitedEvent`.
+
+### from_click
+
+Link-from-click (spec 237 T000b, [USAGE.md](USAGE.md#identities-per-workspace-and-linking-from-a-click-14)). Needs
+`linking.enabled`, an `identity_store` implementing `SlackIdentityLinksInterface`, an `account_resolver` and
+`email_checker`; the build fails otherwise. Routes under `{ui.prefix}/account/slack`: `GET|POST /link/{token}`,
+`POST /unlink/{team}`. The single-use claim and the confirmation locks use `ingress.replay_lock_factory`; the limiter (confirmations only) uses
+`rate_limiter_cache_pool`. The Slack app needs `users:read` (and `users:read.email` unless every installation opts in
+to `allowUnverifiedLinkConfirm`).
 
 ## test_connection
 

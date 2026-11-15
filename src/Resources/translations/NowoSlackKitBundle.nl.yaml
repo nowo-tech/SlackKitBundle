@@ -46,11 +46,25 @@ link:
         confirmation_sent: "Bevestiging verstuurd: klik op Bevestigen in het directe Slack-bericht."
         confirmation_failed: "De bevestiging kon niet worden verstuurd. Controleer de Slack-ID en probeer het opnieuw."
         unlinked: "Je Slack-account is ontkoppeld."
+        linked: "Je Slack-account is gekoppeld voor deze workspace."
+        link_expired: "Deze Slack-link is ongeldig, verlopen of al gebruikt. Klik opnieuw op de knop in Slack."
+        email_mismatch: "Je Slack-e-mail is geen geverifieerd e-mailadres van dit account, dus de koppeling is geweigerd. Log in met het juiste account of verifieer dat e-mailadres eerst."
+        email_unavailable: "Slack deelt het e-mailadres van dit lid niet, dus de koppeling kan niet worden gecontroleerd. Vraag een beheerder."
+        email_unconfirmed: "Volgens Slack is je Slack-e-mailadres niet bevestigd. Bevestig het in Slack en klik dan opnieuw op de knop."
+        already_linked_in_workspace: "Je account is in deze workspace al gekoppeld aan een ander Slack-lid. Ontkoppel dat eerst."
 slack:
     confirm:
         text: "Is dit je Slack-account? Klik op Bevestigen om het te koppelen."
         button: "Bevestigen"
         linked: "Je Slack-account is gekoppeld."
+    link_offer:
+        text_minutes: "{1} Koppel je account om vanuit Slack te handelen. Deze link is alleen voor jou en verloopt over 1 minuut.|]1,Inf[ Koppel je account om vanuit Slack te handelen. Deze link is alleen voor jou en verloopt over %count% minuten."
+        text_seconds: "Koppel je account om vanuit Slack te handelen. Deze link is alleen voor jou en verloopt over %count% seconden."
+        button: "Mijn account koppelen"
+    linked_dm:
+        your_account: "je account"
+        text: "Je Slack-account in %team% is nu gekoppeld aan %account%. Ben jij dit niet? Ontkoppel het."
+        unlink: "Ontkoppelen"
 interaction:
     link_required: "Koppel en bevestig eerst je Slack-account (accountprofiel)."
     button_invalid: "Deze knop is niet meer geldig."
@@ -71,3 +85,8 @@ install:
         invalid_grant: "Slack gaf geen bruikbare botinstallatie terug. Installeer opnieuw."
         not_allowed: "Je mag Slack hier niet meer installeren."
         own_app_installed: "Deze workspace is al verbonden via een eigen Slack-app. Verwijder die verbinding voordat je \"Toevoegen aan Slack\" gebruikt."
+link_click:
+    page_title: "Je Slack-account koppelen"
+    title: "%name% in %team% koppelen?"
+    message: "Het Slack-lid %name% (%id%) van de workspace %team% handelt als jou wanneer het op Slack-knoppen klikt. Bevestig alleen als jij dit bent."
+    confirm: "Bevestigen"

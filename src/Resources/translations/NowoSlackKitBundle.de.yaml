@@ -46,11 +46,25 @@ link:
         confirmation_sent: "Bestätigung gesendet: Klicken Sie in der Slack-Direktnachricht auf Bestätigen."
         confirmation_failed: "Die Bestätigung konnte nicht gesendet werden. Prüfen Sie die Slack-ID und versuchen Sie es erneut."
         unlinked: "Ihr Slack-Konto ist nicht mehr verknüpft."
+        linked: "Dein Slack-Konto ist für diesen Workspace verknüpft."
+        link_expired: "Dieser Slack-Link ist ungültig, abgelaufen oder schon benutzt. Klicke in Slack erneut auf die Schaltfläche."
+        email_mismatch: "Deine Slack-E-Mail ist keine bestätigte E-Mail dieses Kontos, daher wurde die Verknüpfung abgelehnt. Melde dich mit dem passenden Konto an oder bestätige zuerst diese E-Mail."
+        email_unavailable: "Slack gibt die E-Mail dieses Mitglieds nicht frei, daher kann die Verknüpfung nicht geprüft werden. Wende dich an einen Administrator."
+        email_unconfirmed: "Laut Slack ist deine Slack-E-Mail nicht bestätigt. Bestätige sie in Slack und klicke dann erneut auf die Schaltfläche."
+        already_linked_in_workspace: "Dein Konto ist in diesem Workspace bereits mit einem anderen Slack-Mitglied verknüpft. Löse diese Verknüpfung zuerst."
 slack:
     confirm:
         text: "Ist das Ihr Slack-Konto? Klicken Sie auf Bestätigen, um es zu verknüpfen."
         button: "Bestätigen"
         linked: "Ihr Slack-Konto ist verknüpft."
+    link_offer:
+        text_minutes: "{1} Verknüpfe dein Konto, um in Slack zu handeln. Dieser Link gilt nur für dich und läuft in 1 Minute ab.|]1,Inf[ Verknüpfe dein Konto, um in Slack zu handeln. Dieser Link gilt nur für dich und läuft in %count% Minuten ab."
+        text_seconds: "Verknüpfe dein Konto, um in Slack zu handeln. Dieser Link gilt nur für dich und läuft in %count% Sekunden ab."
+        button: "Mein Konto verknüpfen"
+    linked_dm:
+        your_account: "dein Konto"
+        text: "Dein Slack-Konto in %team% ist jetzt mit %account% verknüpft. Nicht du? Löse die Verknüpfung."
+        unlink: "Verknüpfung lösen"
 interaction:
     link_required: "Verknüpfen und bestätigen Sie zuerst Ihr Slack-Konto (Kontoprofil)."
     button_invalid: "Diese Schaltfläche ist nicht mehr gültig."
@@ -71,3 +85,8 @@ install:
         invalid_grant: "Slack hat keine nutzbare Bot-Installation zurückgegeben. Installiere erneut."
         not_allowed: "Du darfst Slack hier nicht mehr installieren."
         own_app_installed: "Dieser Workspace ist bereits über seine eigene Slack-App verbunden. Entferne diese Verbindung, bevor du \"Zu Slack hinzufügen\" verwendest."
+link_click:
+    page_title: "Slack-Konto verknüpfen"
+    title: "%name% in %team% verknüpfen?"
+    message: "Das Slack-Mitglied %name% (%id%) des Workspace %team% handelt als du, wenn es auf Slack-Schaltflächen klickt. Bestätige nur, wenn du das bist."
+    confirm: "Bestätigen"

@@ -8,6 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use Nowo\InstanceSettingsBundle\Settings\InstanceSettingsInterface;
+use Nowo\SlackKitBundle\Tests\Support\FakeIdentityLinks;
 use Nowo\SlackKitBundle\Tests\Support\FakeIdentityStore;
 use Nowo\SlackKitBundle\Tests\Support\FakeInstallAuthorizer;
 use Nowo\SlackKitBundle\Tests\Support\FakeSlackApi;
@@ -67,6 +68,7 @@ abstract class KernelTestCase extends TestCase
                 $services->set(MemoryStoreProbeController::class)->autowire()->tag('controller.service_arguments')->public();
                 $services->set('test.accounts', TokenAccountResolver::class)->args([new ReferenceConfigurator('security.token_storage')])->public();
                 $services->set('test.host_store', HostInstallationStore::class)->public();
+                $services->set('test.identity_links', FakeIdentityLinks::class)->public();
                 $services->set('test.env', TestEnvLoader::class)->tag('container.env_var_loader');
                 $services->set('test.host_bindings', HostBindingStore::class)->public();
                 $services->set('test.install_authorizer', FakeInstallAuthorizer::class)->public();

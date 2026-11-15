@@ -6,6 +6,7 @@ are listed per target version.
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [To 1.4.0](#to-140)
 - [To 1.3.0](#to-130)
 - [To 1.3.0](#to-130-1)
   - [Several workspaces](#several-workspaces)
@@ -21,6 +22,33 @@ are listed per target version.
   - [Values already posted to Slack](#values-already-posted-to-slack)
 
 ## Unreleased
+
+## To 1.4.0
+
+From **1.3.x**:
+
+```bash
+composer update nowo-tech/slack-kit-bundle
+```
+
+Target **1.4.0** (minor). Nothing changes until you enable `linking.from_click`. Behaviour changes to check:
+
+- `ActorResolver::resolve()` returns no actor when the installation key names a workspace and the click comes from
+  another one (it never happens through the ingress, which builds the key from the click).
+- New `LinkResult` cases (`Linked`, `LinkExpired`, `EmailMismatch`, `EmailUnavailable`, `AlreadyLinkedInWorkspace`):
+  only the new methods return them, but an exhaustive `match` over `LinkResult` needs a default arm.
+
+To link identities from clicks:
+
+1. Implement `SlackIdentityLinksInterface` on your identity store (one row per account and workspace, unique
+   (workspace, member), exact comparison; `findLinkByAccount()` / `removeLink()` keep acting on the default
+   installation's workspace; `saveLink()` throws `SlackIdentityConflictException` for a pair another account holds,
+   never replaces it) and extend `SlackIdentityLinksContractTestCase`. Beacon migrates `User::$slackUserId` into
+   that table as the identity of the default installation.
+2. Implement `SlackVerifiedEmailCheckerInterface` (verified e-mails only).
+3. Configure `linking.from_click` (`enabled`, `email_checker`, `manage_route`, optionally `layout`), grant the Slack app
+   `users:read` and `users:read.email`, and render `nowo_slack_kit_identities()` on the account's integrations page.
+4. Persist `SlackInstallation::$allowUnverifiedLinkConfirm` if you offer the per-installation opt-in.
 
 ## To 1.3.0
 

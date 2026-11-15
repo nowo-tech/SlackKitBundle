@@ -8,6 +8,8 @@ use LogicException;
 use Nowo\InstanceSettingsBundle\Settings\InstanceSettingsInterface;
 use Nowo\SlackKitBundle\Api\ResponseUrlClient;
 use Nowo\SlackKitBundle\Api\ResponseUrlClientInterface;
+use Nowo\SlackKitBundle\Api\SlackUserDirectoryInterface;
+use Nowo\SlackKitBundle\Controller\ClickLinkController;
 use Nowo\SlackKitBundle\Credentials\InMemoryInstallationBindingStore;
 use Nowo\SlackKitBundle\Credentials\InMemoryInstallationStore;
 use Nowo\SlackKitBundle\Credentials\InMemoryInstallationStoreBoundaryListener;
@@ -19,7 +21,12 @@ use Nowo\SlackKitBundle\Install\InstallController;
 use Nowo\SlackKitBundle\Install\SlackInstallAuthorizerInterface;
 use Nowo\SlackKitBundle\Install\SlackOAuthClient;
 use Nowo\SlackKitBundle\Interaction\ActorResolver;
+use Nowo\SlackKitBundle\Interaction\InteractionRouter;
 use Nowo\SlackKitBundle\Interaction\ReplyDispatcher;
+use Nowo\SlackKitBundle\Linking\AccountLinker;
+use Nowo\SlackKitBundle\Linking\ClickLinker;
+use Nowo\SlackKitBundle\Linking\ClickLinkerInterface;
+use Nowo\SlackKitBundle\Linking\ClickLinkSigner;
 use Nowo\SlackKitBundle\Routing\SlackKitRouteLoader;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -59,6 +66,29 @@ final class InstallationsWiringTest extends TestCase
         self::assertSame(ResponseUrlClientInterface::class, (string) $container->getDefinition(ReplyDispatcher::class)->getArgument(2));
         self::assertFalse($container->getDefinition(IngressController::class)->getArgument(14), 'own-app clicks get no actor by default (PZ-M1)');
         self::assertNull($container->getDefinition(ActorResolver::class)->getArgument(1));
+    }
+
+    public function testLinkFromClickWiring(): void
+    {
+        $off = $this->load([]);
+        self::assertFalse($off->hasDefinition(ClickLinker::class));
+        self::assertFalse($off->getDefinition(SlackKitRouteLoader::class)->getArgument(6));
+
+        $container = $this->load(['linking' => ['enabled' => true, 'identity_store' => 'app.ids', 'account_resolver' => 'app.accounts', 'return_route' => 'app_profile', 'from_click' => ['enabled' => true, 'email_checker' => 'app.emails', 'manage_route' => 'app_integrations', 'ttl' => 300]]]);
+        $linker    = $container->getDefinition(ClickLinker::class);
+        self::assertSame('app.ids', (string) $linker->getArgument(0));
+        self::assertSame('app.emails', (string) $linker->getArgument(1));
+        self::assertSame('lock.factory', (string) $linker->getArgument(6));
+        self::assertSame('app_integrations', $linker->getArgument(10));
+        self::assertSame(300, $container->getDefinition(ClickLinkSigner::class)->getArgument(2));
+        self::assertSame(300, $linker->getArgument(16), 'the offer names the same lifetime as the token');
+        self::assertSame(20.0, $linker->getArgument(17), 'confirmation locks outlive one Slack call (api.max_duration + 10 s)');
+        self::assertSame('lock.factory', (string) $container->getDefinition(AccountLinker::class)->getArgument(15), 'the 1.2 flows share the member lock');
+        self::assertSame(ClickLinker::class, (string) $container->getAlias(ClickLinkerInterface::class));
+        self::assertTrue($container->getAlias(SlackUserDirectoryInterface::class)->isPublic());
+        self::assertSame(ClickLinkerInterface::class, (string) $container->getDefinition(InteractionRouter::class)->getArgument('$links'));
+        self::assertTrue($container->getDefinition(SlackKitRouteLoader::class)->getArgument(6));
+        self::assertSame('app_integrations', $container->getDefinition(ClickLinkController::class)->getArgument(5));
     }
 
     public function testOwnAppActorsAndTheActorFilterAreOptIn(): void
@@ -119,6 +149,10 @@ final class InstallationsWiringTest extends TestCase
         yield 'no account resolver' => [['installations' => ['oauth' => ['enabled' => true, 'authorizer' => 'app.authorizer']] + $oauth['installations']] + $oauth, InvalidConfigurationException::class];
         yield 'empty scopes' => [['installations' => ['oauth' => ['scopes' => []] + $oauth['installations']['oauth']] + $oauth['installations']] + $oauth, InvalidConfigurationException::class];
         yield 'literal client secret' => [['apps' => ['default' => ['client_secret' => 'literalclientsecretliteral000000']]], InvalidConfigurationException::class];
+        yield 'link from click without linking' => [['linking' => ['from_click' => ['enabled' => true, 'email_checker' => 'app.emails']]], InvalidConfigurationException::class];
+        yield 'link from click without e-mail checker' => [['linking' => ['enabled' => true, 'identity_store' => 'app.ids', 'account_resolver' => 'app.accounts', 'from_click' => ['enabled' => true]]], InvalidConfigurationException::class];
+        yield 'link from click env switch' => [['linking' => ['from_click' => ['enabled' => '%env(bool:SLACK_CLICK)%']]], InvalidConfigurationException::class];
+        yield 'link ttl over 10 minutes' => [['linking' => ['from_click' => ['ttl' => 601]]], InvalidConfigurationException::class];
         yield 'own-app actors without a filter (PZ-L6)' => [['installations' => ['own_app_actors' => true]], InvalidConfigurationException::class];
         yield 'own-app actors env switch' => [['installations' => ['own_app_actors' => '%env(bool:SLACK_OWN_APP_ACTORS)%']], InvalidConfigurationException::class];
         yield 'env switch' => [['installations' => ['oauth' => ['enabled' => '%env(bool:SLACK_OAUTH)%']]], InvalidConfigurationException::class];

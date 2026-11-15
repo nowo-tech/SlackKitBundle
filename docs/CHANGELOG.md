@@ -6,14 +6,17 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+  - [Added (spec 237, T000b: identities per workspace, link from a click)](#added-spec-237-t000b-identities-per-workspace-link-from-a-click)
+  - [Changed](#changed)
+  - [Security](#security)
 - [[1.3.0] - 2026-11-14](#130---2026-11-14)
   - [Added (spec 237, T000a: several workspaces)](#added-spec-237-t000a-several-workspaces)
   - [Added (spec 237, T000c: message updates)](#added-spec-237-t000c-message-updates)
-  - [Changed](#changed)
-  - [Security](#security)
+  - [Changed](#changed-1)
+  - [Security](#security-1)
 - [[1.2.1] - 2026-11-12](#121---2026-11-12)
   - [Fixed](#fixed)
-  - [Changed](#changed-1)
+  - [Changed](#changed-2)
 - [[1.2.0] - 2026-11-10](#120---2026-11-10)
   - [Added](#added)
   - [Documentation](#documentation)
@@ -28,6 +31,50 @@ All notable changes to this project are documented here. The format follows
   - [Notes / deviations from contract v1.1](#notes--deviations-from-contract-v11)
 
 ## [Unreleased]
+
+Target: **1.4.0** (minor; no breaking change, see [UPGRADING.md](UPGRADING.md#to-140)). Symfony Beacon spec 237,
+task T000b.
+
+### Added (spec 237, T000b: identities per workspace, link from a click)
+
+- Several Slack identities per account, one per workspace: the port `SlackIdentityLinksInterface` (extends
+  `SlackIdentityStoreInterface` with `linksOf()`, `removeLinkIn()`, `accountLabel()`) and its contract test case
+  `SlackIdentityLinksContractTestCase`.
+- **Link from a click** (`linking.from_click`, off by default): an unlinked clicker of a Slack-signed click gets an
+  ephemeral "Link my account" button with a signed, single-use link (10 minutes; workspace, member, installation).
+  The page (`GET {ui.prefix}/account/slack/link/{token}`, UiKit confirm page, sign-in required) shows the workspace and
+  the member's Slack display name; *Confirm* (`POST`, CSRF) links the identity **only when the member's e-mail, read
+  through that installation, is a verified e-mail of the account** (host port `SlackVerifiedEmailCheckerInterface`,
+  value `SlackVerifiedEmailCheck`), unless the installation opts in to `allowUnverifiedLinkConfirm`; the member then
+  gets a DM "linked to <account> — not you? Unlink". `ClickLinkerInterface` (public alias) for hosts with their own
+  pages; `SlackIdentityLinkedEvent`.
+- Per-workspace unlink: `POST {ui.prefix}/account/slack/unlink/{team}` (CSRF), Twig `nowo_slack_kit_identities()`;
+  `SlackAccountUnlinkedEvent::$teamId`.
+- `SlackUserDirectoryInterface::userProfile()` (`users.info`, public alias) and `SlackUserProfile`;
+  `SlackInstallation::$allowUnverifiedLinkConfirm`; `SlackLink::SOURCE_CLICK`; `LinkResult` cases `Linked`,
+  `LinkExpired`, `EmailMismatch`, `EmailUnavailable`, `AlreadyLinkedInWorkspace`; translations in 7 locales.
+- Audit PZ round 2: confirmations run under (workspace, member) and (account, workspace) locks and re-read inside
+  them; `saveLink()` refuses a pair held by another account (`SlackIdentityConflictException`, contract test); the
+  token is claimed after the checks; ASCII-only e-mail checks; `is_email_confirmed: false` refused
+  (`LinkResult::EmailUnconfirmed`, `SlackUserProfile::$emailConfirmed`); sanitised plain-text DM label; the page no
+  longer counts against the per-account limit. The 1.2 claim / e-mail lookup / confirm flows share the member lock
+  and map a store conflict to `InUse` (R2-D1); the confirmation locks live `api.max_duration` + 10 s and the DM is sent
+  after they are released.
+- The "Link my account" offer names the configured link lifetime (`linking.from_click.ttl`, in minutes or seconds),
+  pluralised in the 7 locales.
+
+### Changed
+
+- `ActorResolver` refuses a click whose workspace is not the installation's (one identity per workspace).
+- A click refused for a missing actor answers with the "Link my account" offer when link-from-click is on (same 403
+  body).
+
+### Security
+
+- Links are offered only for clicks signed by Slack through a configured app: never for resolver-verified or own-app
+  clicks, nor legacy values. A verified identity of another account is never taken; an unverified claim yields only to
+  an e-mail-proven link. Tokens use their own HKDF key, live at most 10 minutes and are claimed once with a lock.
+  No e-mail, token or secret reaches the bundle's logs.
 
 ## [1.3.0] - 2026-11-14
 

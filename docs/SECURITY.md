@@ -13,6 +13,7 @@ Report vulnerabilities as described in [.github/SECURITY.md](../.github/SECURITY
 - [Secrets and logging](#secrets-and-logging)
 - [Installation store contract](#installation-store-contract)
 - [Several workspaces (1.3, spec 237)](#several-workspaces-13-spec-237)
+- [Identities per workspace (1.4, spec 237 T000b)](#identities-per-workspace-14-spec-237-t000b)
 - [Residual risks](#residual-risks)
 - [Host responsibilities](#host-responsibilities)
 - [Testing with fakes only](#testing-with-fakes-only)
@@ -163,6 +164,24 @@ The bundle stores nothing itself: the multi-installation and binding stores are 
 [installation store contract](#installation-store-contract) (encrypt the bot token, refresh token and own-app signing
 secret at rest; compare workspace ids and scope ids exactly).
 
+## Identities per workspace (1.4, spec 237 T000b)
+
+| Threat | Control |
+| --- | --- |
+| A forwarded link is confirmed by someone else | The member's e-mail (Slack `users.info` through that installation) must be a **verified** e-mail of the confirming account (host port); an installation's `allowUnverifiedLinkConfirm` is off by default; the member gets a DM naming the account with an *Unlink* link |
+| Forged member id in the offer | Links are offered only for clicks signed by Slack through a configured app; never for resolver-verified or own-app clicks or legacy values; own-app clicks never confirm the 1.2 link either |
+| Token forgery, replay, staleness | HMAC-SHA256 with its own HKDF key from `kernel.secret`; at most 10 minutes; claimed once with a lock (never released) before anything else; the page does not consume it, the POST needs CSRF and the session |
+| Identity takeover | A verified identity of another account is never taken; an unverified claim yields only to an e-mail-proven link (`SlackLinkReleasedEvent`); one identity per account and workspace |
+| Concurrent confirmations (audit R2-M1) | Every read and the write of a confirmation run under two locks, (workspace, member) then (account, workspace), and re-read inside them; a concurrent confirmation answers `Unavailable` (try again). The store contract makes `saveLink()` **refuse** (`SlackIdentityConflictException`) a pair held by another account, never replace it, which also covers writers outside these locks; the conflict answers `InUse`. The 1.2 typed-claim, e-mail lookup and confirm flows take the same (workspace, member) lock and answer `InUse` / *Confirmation refused* on a conflict, never a 500 (R2-D1). Locks live `api.max_duration` + 10 s, longer than the one Slack call inside them; the DM is sent after they are released |
+| Burned tokens (R2-L2) | The token is claimed inside the locks after every check passed: a mismatch, a rate limit or a transient Slack error does not spend it |
+| Look-alike e-mails (R2-L1) | Only printable-ASCII addresses are compared, lower-cased with ASCII rules; Unicode look-alikes and invisible characters answer `EmailUnavailable` |
+| Unconfirmed Slack e-mails (R2-L4) | A member whose `users.info` says `is_email_confirmed: false` is refused (`EmailUnconfirmed`) |
+| Account label in the DM (R2-L3) | A label with `@`, `://` or control characters becomes a neutral "your account"; at most 80 characters; the DM body is `plain_text` (no mrkdwn, mentions or links) and the notification text carries no label |
+| Drained limits (R2-I1) | Only confirmations count against the per-account limit; the page does not |
+| Actor from another workspace | The actor is the verified link of the click's workspace; a click whose workspace is not the installation's gets none; disabled accounts act as not linked |
+| Personal data in logs | No e-mail, token or secret in the bundle's log lines (ids and codes only); `SlackUserProfile::$email` is never logged |
+| Worker state | Stateless services; single use in the lock store; tested with alternating accounts in one kernel without the resetter |
+
 ## Residual risks
 
 - **Replay memory needs an expiring shared lock store.** Outside debug and test only an allowlist builds (Redis,
@@ -192,6 +211,18 @@ secret at rest; compare workspace ids and scope ids exactly).
   leaves it; handlers must re-check the item's state on every click.
 - **`SlackInteractionReceivedEvent::$payload` is the raw payload (PZ-I5).** It still holds `response_url` (and
   `response_urls`) in clear; listeners must not log it as is. Handlers get the URL as a redacted `SlackSecret`.
+- **The e-mail match trusts Slack's profile e-mail and the host's verification.** A workspace admin can change a
+  member's profile e-mail in Slack; with an e-mail the account owns and verified that is still the account owner's
+  address. Installations that opt in to `allowUnverifiedLinkConfirm` drop this check.
+- **The Slack-side e-mail is controlled by the workspace's admins (R2-L4).** In a workspace whose admins (or IdP /
+  SCIM) set member e-mails, an admin can give their own member a victim's address; a victim persuaded to open that
+  member's link and press *Confirm* links their account to it in that workspace. Mitigations: the explicit *Confirm*
+  page names the workspace and the member, Slack's `is_email_confirmed: false` is refused, the DM goes to the member
+  only, and an actor filter can restrict actors to accounts of the scopes bound to the installation.
+- **The link token is in the URL path (R2-I2):** router and access logs, browser history. Useless without the e-mail
+  match; with `allowUnverifiedLinkConfirm` a finder could link the member to their own account within 10 minutes.
+- **The link is a bearer token for 10 minutes.** Whoever gets it (forwarded, shoulder-surfed) and signs in with an
+  account whose verified e-mail matches can confirm it; only the member's own address matches by default.
 - **Slack user ids are not secret.** The limiters, not secrecy, protect linking.
 - **Legacy unsigned values** are accepted while `interactions.legacy_until` is in the future (actor and ingress
   checks still apply; never on resolver-verified or own-app clicks). `legacy_until` must be a strict UTC instant

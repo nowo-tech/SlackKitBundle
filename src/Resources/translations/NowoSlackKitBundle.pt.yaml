@@ -46,11 +46,25 @@ link:
         confirmation_sent: "Confirmação enviada: clique em Confirmar na mensagem direta do Slack."
         confirmation_failed: "Não foi possível enviar a confirmação. Verifique o ID do Slack e tente de novo."
         unlinked: "A sua conta do Slack foi desassociada."
+        linked: "A sua conta do Slack está ligada para este espaço de trabalho."
+        link_expired: "Este link do Slack é inválido, expirou ou já foi usado. Clique de novo no botão no Slack."
+        email_mismatch: "O seu e-mail do Slack não é um e-mail verificado desta conta, por isso a ligação foi recusada. Entre com a conta correspondente ou verifique primeiro esse e-mail."
+        email_unavailable: "O Slack não partilha o e-mail deste membro, por isso a ligação não pode ser verificada. Fale com um administrador."
+        email_unconfirmed: "O Slack indica que o seu e-mail do Slack não está confirmado. Confirme-o no Slack e clique de novo no botão."
+        already_linked_in_workspace: "A sua conta já está ligada a outro membro do Slack neste espaço de trabalho. Desligue-o primeiro."
 slack:
     confirm:
         text: "Esta é a sua conta do Slack? Clique em Confirmar para a associar."
         button: "Confirmar"
         linked: "A sua conta do Slack está associada."
+    link_offer:
+        text_minutes: "{1} Ligue a sua conta para agir a partir do Slack. Este link é só para si e expira em 1 minuto.|]1,Inf[ Ligue a sua conta para agir a partir do Slack. Este link é só para si e expira em %count% minutos."
+        text_seconds: "Ligue a sua conta para agir a partir do Slack. Este link é só para si e expira em %count% segundos."
+        button: "Ligar a minha conta"
+    linked_dm:
+        your_account: "a sua conta"
+        text: "A sua conta do Slack em %team% está agora ligada a %account%. Não é você? Desligue-a."
+        unlink: "Desligar"
 interaction:
     link_required: "Primeiro associe e confirme a sua conta do Slack (perfil da conta)."
     button_invalid: "Este botão já não é válido."
@@ -71,3 +85,8 @@ install:
         invalid_grant: "O Slack não devolveu uma instalação de bot utilizável. Instale novamente."
         not_allowed: "Já não tem permissão para instalar o Slack aqui."
         own_app_installed: "Este espaço de trabalho já está ligado através da sua própria app do Slack. Remova essa ligação antes de usar \"Adicionar ao Slack\"."
+link_click:
+    page_title: "Ligar a sua conta do Slack"
+    title: "Ligar %name% em %team%?"
+    message: "O membro do Slack %name% (%id%) do espaço de trabalho %team% vai agir como si quando clicar em botões do Slack. Confirme apenas se for você."
+    confirm: "Confirmar"

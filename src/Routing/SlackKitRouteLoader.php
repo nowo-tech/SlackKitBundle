@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Nowo\SlackKitBundle\Routing;
 
 use Nowo\SlackKitBundle\Controller\AccountLinkController;
+use Nowo\SlackKitBundle\Controller\ClickLinkController;
 use Nowo\SlackKitBundle\Controller\TestConnectionController;
 use Nowo\SlackKitBundle\Credentials\SlackInstallationKey;
 use Nowo\SlackKitBundle\Ingress\IngressController;
@@ -41,6 +42,7 @@ final class SlackKitRouteLoader extends Loader
      * @param bool $linking whether the account link actions are mounted
      * @param string|null $env environment
      * @param bool $install whether the "Add to Slack" routes are mounted
+     * @param bool $clickLink whether the link-from-click routes are mounted (1.4)
      */
     public function __construct(
         private readonly array $ingress,
@@ -49,6 +51,7 @@ final class SlackKitRouteLoader extends Loader
         private readonly bool $linking,
         ?string $env = null,
         private readonly bool $install = false,
+        private readonly bool $clickLink = false,
     ) {
         parent::__construct($env);
     }
@@ -80,6 +83,9 @@ final class SlackKitRouteLoader extends Loader
         }
         if ($this->linking) {
             $this->attributeRoutes($routes, AccountLinkController::class, rtrim($prefix, '/') . '/account/slack');
+        }
+        if ($this->clickLink) {
+            $this->attributeRoutes($routes, ClickLinkController::class, rtrim($prefix, '/') . '/account/slack');
         }
         if ($this->install) {
             $this->attributeRoutes($routes, InstallController::class, rtrim($prefix, '/') . '/install');

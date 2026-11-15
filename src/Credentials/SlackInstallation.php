@@ -51,6 +51,8 @@ final readonly class SlackInstallation
      * @param string|null $revokedReason why it was revoked (`app_uninstalled`, `tokens_revoked`, or a host reason)
      * @param SlackSecret|null $signingSecret signing secret of the workspace's own app (FR-004), null for an app of
      *                                        `nowo_slack_kit.apps`
+     * @param bool $allowUnverifiedLinkConfirm link-from-click confirms without the verified e-mail match (1.4, spec 237
+     *                                         FR-012; off by default: a forwarded link could be confirmed by anyone)
      *
      * @throws InvalidArgumentException when a secret has the wrong kind, the app id or a scope is malformed
      */
@@ -71,6 +73,7 @@ final readonly class SlackInstallation
         public ?DateTimeImmutable $tokenExpiresAt = null,
         public ?string $revokedReason = null,
         public ?SlackSecret $signingSecret = null,
+        public bool $allowUnverifiedLinkConfirm = false,
     ) {
         if ($botToken->kind !== SlackSecret::BOT_TOKEN) {
             throw new InvalidArgumentException('A Slack installation needs a bot token.');
@@ -129,7 +132,7 @@ final readonly class SlackInstallation
      */
     public function withKey(SlackInstallationKey $key): self
     {
-        return new self($key, $this->botToken, $this->teamId, $this->allowEmailLookup, $this->botUserId, $this->revokedAt, $this->enterpriseId, $this->appId, $this->teamName, $this->scopes, $this->installerUserId, $this->installedAt, $this->refreshToken, $this->tokenExpiresAt, $this->revokedReason, $this->signingSecret);
+        return new self($key, $this->botToken, $this->teamId, $this->allowEmailLookup, $this->botUserId, $this->revokedAt, $this->enterpriseId, $this->appId, $this->teamName, $this->scopes, $this->installerUserId, $this->installedAt, $this->refreshToken, $this->tokenExpiresAt, $this->revokedReason, $this->signingSecret, $this->allowUnverifiedLinkConfirm);
     }
 
     /**
@@ -137,7 +140,7 @@ final readonly class SlackInstallation
      */
     public function revoked(DateTimeImmutable $at, ?string $reason = null): self
     {
-        return new self($this->key, $this->botToken, $this->teamId, $this->allowEmailLookup, $this->botUserId, $at, $this->enterpriseId, $this->appId, $this->teamName, $this->scopes, $this->installerUserId, $this->installedAt, $this->refreshToken, $this->tokenExpiresAt, $reason, $this->signingSecret);
+        return new self($this->key, $this->botToken, $this->teamId, $this->allowEmailLookup, $this->botUserId, $at, $this->enterpriseId, $this->appId, $this->teamName, $this->scopes, $this->installerUserId, $this->installedAt, $this->refreshToken, $this->tokenExpiresAt, $reason, $this->signingSecret, $this->allowUnverifiedLinkConfirm);
     }
 
     /**
@@ -145,6 +148,6 @@ final readonly class SlackInstallation
      */
     public function withWorkspace(SlackTeamId $team, ?string $botUserId): self
     {
-        return new self($this->key, $this->botToken, $team, $this->allowEmailLookup, $botUserId, $this->revokedAt, $this->enterpriseId, $this->appId, $this->teamName, $this->scopes, $this->installerUserId, $this->installedAt, $this->refreshToken, $this->tokenExpiresAt, $this->revokedReason, $this->signingSecret);
+        return new self($this->key, $this->botToken, $team, $this->allowEmailLookup, $botUserId, $this->revokedAt, $this->enterpriseId, $this->appId, $this->teamName, $this->scopes, $this->installerUserId, $this->installedAt, $this->refreshToken, $this->tokenExpiresAt, $this->revokedReason, $this->signingSecret, $this->allowUnverifiedLinkConfirm);
     }
 }
