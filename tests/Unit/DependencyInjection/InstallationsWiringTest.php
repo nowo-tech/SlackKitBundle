@@ -23,6 +23,7 @@ use Nowo\SlackKitBundle\Install\SlackOAuthClient;
 use Nowo\SlackKitBundle\Interaction\ActorResolver;
 use Nowo\SlackKitBundle\Interaction\InteractionRouter;
 use Nowo\SlackKitBundle\Interaction\ReplyDispatcher;
+use Nowo\SlackKitBundle\Linking\AccountLinker;
 use Nowo\SlackKitBundle\Linking\ClickLinker;
 use Nowo\SlackKitBundle\Linking\ClickLinkerInterface;
 use Nowo\SlackKitBundle\Linking\ClickLinkSigner;
@@ -81,6 +82,8 @@ final class InstallationsWiringTest extends TestCase
         self::assertSame('app_integrations', $linker->getArgument(10));
         self::assertSame(300, $container->getDefinition(ClickLinkSigner::class)->getArgument(2));
         self::assertSame(300, $linker->getArgument(16), 'the offer names the same lifetime as the token');
+        self::assertSame(20.0, $linker->getArgument(17), 'confirmation locks outlive one Slack call (api.max_duration + 10 s)');
+        self::assertSame('lock.factory', (string) $container->getDefinition(AccountLinker::class)->getArgument(15), 'the 1.2 flows share the member lock');
         self::assertSame(ClickLinker::class, (string) $container->getAlias(ClickLinkerInterface::class));
         self::assertTrue($container->getAlias(SlackUserDirectoryInterface::class)->isPublic());
         self::assertSame(ClickLinkerInterface::class, (string) $container->getDefinition(InteractionRouter::class)->getArgument('$links'));

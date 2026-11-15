@@ -56,8 +56,8 @@ final readonly class ClickLinker implements ClickLinkerInterface
     /** `action_id` of the link button (a URL button; Slack sends a callback the router answers with 200). */
     public const OPEN_ACTION = 'nowo_slack_kit.link.open';
 
-    /** Seconds the confirmation locks live at most (released in `finally`). */
-    public const LOCK_TTL = 30;
+    /** Default lifetime of the confirmation locks (released in `finally`); the bundle wires `api.max_duration` + 10 s. */
+    public const DEFAULT_LOCK_TTL = 30.0;
 
     /** Longest account label shown in the DM. */
     public const MAX_LABEL = 80;
@@ -80,6 +80,7 @@ final readonly class ClickLinker implements ClickLinkerInterface
      * @param string $defaultLocale locale of the Slack-side texts
      * @param LoggerInterface $logger PSR-3 logger (ids and codes only)
      * @param int $ttl lifetime of the link in seconds (`linking.from_click.ttl`), named in the offer text
+     * @param float $lockTtl lifetime of the confirmation locks: longer than one Slack call (`api.max_duration` + 10 s)
      */
     public function __construct(
         private SlackIdentityLinksInterface $identities,
@@ -99,6 +100,7 @@ final readonly class ClickLinker implements ClickLinkerInterface
         private string $defaultLocale = 'en',
         private LoggerInterface $logger = new NullLogger(),
         private int $ttl = ClickLinkSigner::MAX_TTL,
+        private float $lockTtl = self::DEFAULT_LOCK_TTL,
     ) {
     }
 
@@ -156,24 +158,40 @@ final readonly class ClickLinker implements ClickLinkerInterface
         if (!$verified instanceof ClickLinkToken) {
             return LinkResult::LinkExpired;
         }
-        $keys = ['nowo_slack_kit.link_pair.' . hash('sha256', $verified->installation->app . '|' . $verified->team->value . '|' . $verified->user->value), 'nowo_slack_kit.link_account.' . hash('sha256', $verified->installation->app . '|' . $accountId . '|' . $verified->team->value)];
+        $keys = [self::pairLockKey($verified->installation->app, $verified->team, $verified->user), 'nowo_slack_kit.link_account.' . hash('sha256', $verified->installation->app . '|' . $accountId . '|' . $verified->team->value)];
         sort($keys);
-        $held = [];
+        $held   = [];
+        $result = LinkResult::Unavailable;
         try {
             foreach ($keys as $key) {
-                $lock = $this->locks->createLock($key, self::LOCK_TTL);
+                $lock = $this->locks->createLock($key, $this->lockTtl);
                 if (!$lock->acquire(false)) {
                     return LinkResult::Unavailable; // Another confirmation for this member or account is running.
                 }
                 $held[] = $lock;
             }
-
-            return $this->link($accountId, $verified);
+            $result = $this->link($accountId, $verified);
         } finally {
             foreach ($held as $lock) {
                 $lock->release();
             }
         }
+        if ($result instanceof SlackInstallation) {
+            // The DM goes out after the locks are released (it is a Slack call, best effort).
+            $this->notify($accountId, $verified, $result);
+
+            return LinkResult::Linked;
+        }
+
+        return $result;
+    }
+
+    /**
+     * The lock key of a (workspace, member) pair, shared by every flow that writes it (1.2 claims included).
+     */
+    public static function pairLockKey(string $app, SlackTeamId $team, SlackUserId $user): string
+    {
+        return 'nowo_slack_kit.link_pair.' . hash('sha256', $app . '|' . $team->value . '|' . $user->value);
     }
 
     /**
@@ -203,9 +221,10 @@ final readonly class ClickLinker implements ClickLinkerInterface
     }
 
     /**
-     * The confirmation, under the locks: checks (re-read), e-mail match, single-use claim, then the write.
+     * The confirmation, under the locks: checks (re-read), e-mail match, single-use claim, then the write. Returns the
+     * installation when linked (the caller sends the DM), else the refusal.
      */
-    private function link(string $accountId, ClickLinkToken $verified): LinkResult
+    private function link(string $accountId, ClickLinkToken $verified): SlackInstallation|LinkResult
     {
         $checked = $this->check($accountId, $verified, true);
         if ($checked instanceof LinkResult) {
@@ -245,9 +264,8 @@ final readonly class ClickLinker implements ClickLinkerInterface
         $this->events?->dispatch(new SlackAccountVerifiedEvent($accountId, $verified->team->value, $verified->user->value));
         $this->events?->dispatch(new SlackIdentityLinkedEvent($accountId, $verified->team->value, $verified->user->value, $verified->installation, $matched));
         $this->logger->info('Slack identity linked from a click.', ['team' => $verified->team->value, 'email_matched' => $matched]);
-        $this->notify($accountId, $verified, $installation);
 
-        return LinkResult::Linked;
+        return $installation;
     }
 
     /**

@@ -533,7 +533,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
      */
     private function registerLinking(ContainerBuilder $container, array $config): void
     {
-        /** @var array{default_locale: string, default_app: string, linking: array{enabled: bool, identity_store: string|null, account_resolver: string|null, claim_ttl: string, confirmation_ttl: string, email_lookup: bool, return_route: string|null, rate_limiter_cache_pool: string, claim_per_account: array{limit: int, interval: string}, email_lookup_per_account: array{limit: int, interval: string}, confirmation_per_account: array{limit: int, interval: string}, confirmation_per_target: array{limit: int, interval: string}}} $config */
+        /** @var array{default_locale: string, default_app: string, ingress: array{replay_lock_factory: string}, linking: array{enabled: bool, identity_store: string|null, account_resolver: string|null, claim_ttl: string, confirmation_ttl: string, email_lookup: bool, return_route: string|null, rate_limiter_cache_pool: string, claim_per_account: array{limit: int, interval: string}, email_lookup_per_account: array{limit: int, interval: string}, confirmation_per_account: array{limit: int, interval: string}, confirmation_per_target: array{limit: int, interval: string}}} $config */
         $linking = $config['linking'];
         if (!$linking['enabled']) {
             return;
@@ -564,6 +564,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
             $config['default_locale'],
             new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE),
             new Reference(LegacyValuePolicy::class),
+            new Reference($config['ingress']['replay_lock_factory']),
         ]))->setPublic(true)->addTag('monolog.logger', ['channel' => 'slack']));
         // Documented API (1.2, DDD P2): the bundle's own services use the interface id, so a host replacement applies everywhere.
         $container->setAlias(AccountLinkerInterface::class, AccountLinker::class)->setPublic(true);
@@ -589,7 +590,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
      */
     private function registerClickLinking(ContainerBuilder $container, array $config): bool
     {
-        /** @var array{default_locale: string, ingress: array{replay_lock_factory: string}, linking: array{enabled: bool, identity_store: string|null, account_resolver: string|null, return_route: string|null, rate_limiter_cache_pool: string, from_click: array{enabled: bool, email_checker: string|null, ttl: int, manage_route: string|null, layout: string|null, allow_http: bool, rate_limit: array{limit: int, interval: string}}}} $config */
+        /** @var array{default_locale: string, api: array{max_duration: float}, ingress: array{replay_lock_factory: string}, linking: array{enabled: bool, identity_store: string|null, account_resolver: string|null, return_route: string|null, rate_limiter_cache_pool: string, from_click: array{enabled: bool, email_checker: string|null, ttl: int, manage_route: string|null, layout: string|null, allow_http: bool, rate_limit: array{limit: int, interval: string}}}} $config */
         $click = $config['linking']['from_click'];
         if (!$click['enabled']) {
             return false;
@@ -623,6 +624,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
             $config['default_locale'],
             new Reference('logger', ContainerInterface::NULL_ON_INVALID_REFERENCE),
             $click['ttl'],
+            $config['api']['max_duration'] + 10.0,
         ]))->addTag('monolog.logger', ['channel' => 'slack']));
         $container->setAlias(ClickLinkerInterface::class, ClickLinker::class)->setPublic(true);
         $container->setAlias(SlackUserDirectoryInterface::class, SlackApiClient::class)->setPublic(true);

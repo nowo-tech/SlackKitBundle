@@ -57,7 +57,9 @@ task T000b.
   them; `saveLink()` refuses a pair held by another account (`SlackIdentityConflictException`, contract test); the
   token is claimed after the checks; ASCII-only e-mail checks; `is_email_confirmed: false` refused
   (`LinkResult::EmailUnconfirmed`, `SlackUserProfile::$emailConfirmed`); sanitised plain-text DM label; the page no
-  longer counts against the per-account limit.
+  longer counts against the per-account limit. The 1.2 claim / e-mail lookup / confirm flows share the member lock
+  and map a store conflict to `InUse` (R2-D1); the confirmation locks live `api.max_duration` + 10 s and the DM is sent
+  after they are released.
 - The "Link my account" offer names the configured link lifetime (`linking.from_click.ttl`, in minutes or seconds),
   pluralised in the 7 locales.
 
