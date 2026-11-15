@@ -50,6 +50,7 @@ link:
         link_expired: "This Slack link is invalid, expired or already used. Click the button in Slack again."
         email_mismatch: "Your Slack e-mail is not a verified e-mail of this account, so the link was refused. Sign in with the matching account or verify that e-mail first."
         email_unavailable: "Slack does not share this member's e-mail, so the link cannot be checked. Ask an administrator."
+        email_unconfirmed: "Slack reports that your Slack e-mail is not confirmed. Confirm it in Slack, then click the button again."
         already_linked_in_workspace: "Your account is already linked to another Slack member in this workspace. Unlink it first."
 slack:
     confirm:
@@ -61,6 +62,7 @@ slack:
         text_seconds: "Link your account to act from Slack. This link is only for you and expires in %count% seconds."
         button: "Link my account"
     linked_dm:
+        your_account: "your account"
         text: "Your Slack account in %team% is now linked to %account%. Not you? Unlink it."
         unlink: "Unlink"
 interaction:

@@ -151,7 +151,8 @@ final class ClickLinkerTest extends TestCase
         self::assertInstanceOf(SlackMessage::class, $dm);
         self::assertSame('slack.linked_dm.unlink', $dm->blocks[1]['elements'][0]['text']['text']);
 
-        self::assertSame(LinkResult::LinkExpired, $linker->confirm('acc-a', $token), 'single use');
+        self::assertSame(LinkResult::AlreadyVerified, $linker->confirm('acc-a', $token), 'a reused link changes nothing');
+        self::assertSame(LinkResult::InUse, $linker->confirm('acc-luis', $token), 'nor for another account');
         $logs = (string) json_encode($this->logger->records);
         self::assertStringNotContainsStringIgnoringCase('example.test', $logs, 'no e-mail in logs');
         self::assertStringNotContainsString($token, $logs, 'no token in logs');
@@ -266,7 +267,8 @@ final class ClickLinkerTest extends TestCase
         self::assertInstanceOf(ClickLinkPreview::class, $linker->preview('acc-a', $this->token()));
         self::assertSame(LinkResult::Linked, $linker->confirm('acc-a', $this->token()), 'the DM is best effort');
         self::assertSame('channel_not_found', $this->logger->records[1]['context']['error'] ?? null);
-        self::assertSame(LinkResult::RateLimited, $linker->preview('acc-a', $this->token()));
+        self::assertSame(LinkResult::AlreadyVerified, $linker->confirm('acc-a', $this->token()));
+        self::assertSame(LinkResult::RateLimited, $linker->confirm('acc-a', $this->token()), 'confirmations count, pages do not');
     }
 
     public function testTheDmHasNoUnlinkButtonWithoutAManagePage(): void

@@ -35,6 +35,12 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 use function hash;
 use function intdiv;
 use function max;
+use function mb_strlen;
+use function mb_substr;
+use function preg_match;
+use function sort;
+use function str_contains;
+use function trim;
 
 /**
  * Link-from-click (spec 237 T000b, FR-010 – FR-013). An unlinked clicker gets an ephemeral answer with a signed,
@@ -49,6 +55,12 @@ final readonly class ClickLinker implements ClickLinkerInterface
 {
     /** `action_id` of the link button (a URL button; Slack sends a callback the router answers with 200). */
     public const OPEN_ACTION = 'nowo_slack_kit.link.open';
+
+    /** Seconds the confirmation locks live at most (released in `finally`). */
+    public const LOCK_TTL = 30;
+
+    /** Longest account label shown in the DM. */
+    public const MAX_LABEL = 80;
 
     /**
      * @param SlackIdentityLinksInterface $identities host identities (several per account)
@@ -115,7 +127,8 @@ final readonly class ClickLinker implements ClickLinkerInterface
     }
 
     /**
-     * What the confirmation page shows, or why it cannot.
+     * What the confirmation page shows, or why it cannot. It neither consumes the token nor counts against the
+     * per-account limit (audit R2-I1): only confirmations do.
      */
     public function preview(string $accountId, string $token): ClickLinkPreview|LinkResult
     {
@@ -123,7 +136,7 @@ final readonly class ClickLinker implements ClickLinkerInterface
         if (!$verified instanceof ClickLinkToken) {
             return LinkResult::LinkExpired;
         }
-        $checked = $this->check($accountId, $verified);
+        $checked = $this->check($accountId, $verified, false);
         if ($checked instanceof LinkResult) {
             return $checked;
         }
@@ -133,57 +146,34 @@ final readonly class ClickLinker implements ClickLinkerInterface
     }
 
     /**
-     * Consumes the token and links the identity.
+     * Links the identity. Every read and the write run under two locks, (workspace, member) then (account, workspace),
+     * so two confirmations never both pass the checks (audit R2-M1); the token is claimed inside them, after every check
+     * passed, so a refused confirmation does not burn it (R2-L2).
      */
     public function confirm(string $accountId, string $token): LinkResult
     {
         $verified = $this->signer->verify($token);
-        if (!$verified instanceof ClickLinkToken || !$this->claim($verified)) {
+        if (!$verified instanceof ClickLinkToken) {
             return LinkResult::LinkExpired;
         }
-        $checked = $this->check($accountId, $verified);
-        if ($checked instanceof LinkResult) {
-            return $checked;
+        $keys = ['nowo_slack_kit.link_pair.' . hash('sha256', $verified->installation->app . '|' . $verified->team->value . '|' . $verified->user->value), 'nowo_slack_kit.link_account.' . hash('sha256', $verified->installation->app . '|' . $accountId . '|' . $verified->team->value)];
+        sort($keys);
+        $held = [];
+        try {
+            foreach ($keys as $key) {
+                $lock = $this->locks->createLock($key, self::LOCK_TTL);
+                if (!$lock->acquire(false)) {
+                    return LinkResult::Unavailable; // Another confirmation for this member or account is running.
+                }
+                $held[] = $lock;
+            }
+
+            return $this->link($accountId, $verified);
+        } finally {
+            foreach ($held as $lock) {
+                $lock->release();
+            }
         }
-        [$installation, $profile] = $checked;
-
-        $matched = false;
-        if (!$installation->allowUnverifiedLinkConfirm) {
-            if ($profile->email === null) {
-                return LinkResult::EmailUnavailable;
-            }
-            try {
-                $check = new SlackVerifiedEmailCheck($accountId, $profile->email);
-            } catch (InvalidArgumentException) {
-                return LinkResult::EmailUnavailable;
-            }
-            if (!$this->emails->isVerifiedEmailOf($check)) {
-                $this->logger->info('Slack link from a click refused.', ['team' => $verified->team->value, 'reason' => 'email_mismatch']);
-
-                return LinkResult::EmailMismatch;
-            }
-            $matched = true;
-        }
-
-        $holder = $this->identities->findLinkBySlackUser($verified->team, $verified->user);
-        if ($holder instanceof SlackLink && $holder->accountId !== $accountId) {
-            // Only an unverified claim yields, and only to a proven (e-mail matched) link.
-            if (!$matched) {
-                return LinkResult::InUse;
-            }
-            // @igor-ignore - Host identity store write (persistent storage), not in-process state.
-            $this->identities->removeLinkIn($holder->accountId, $verified->team);
-            $this->events?->dispatch(new SlackLinkReleasedEvent($holder->accountId, $accountId, $verified->user->value, 'claimed_by_click'));
-        }
-
-        $now = DateTimeImmutable::createFromInterface($this->clock->now());
-        $this->identities->saveLink(new SlackLink($accountId, $verified->team, $verified->user, $now, $now, SlackLink::SOURCE_CLICK));
-        $this->events?->dispatch(new SlackAccountVerifiedEvent($accountId, $verified->team->value, $verified->user->value));
-        $this->events?->dispatch(new SlackIdentityLinkedEvent($accountId, $verified->team->value, $verified->user->value, $verified->installation, $matched));
-        $this->logger->info('Slack identity linked from a click.', ['team' => $verified->team->value, 'email_matched' => $matched]);
-        $this->notify($accountId, $verified, $installation);
-
-        return LinkResult::Linked;
     }
 
     /**
@@ -213,11 +203,84 @@ final readonly class ClickLinker implements ClickLinkerInterface
     }
 
     /**
+     * The confirmation, under the locks: checks (re-read), e-mail match, single-use claim, then the write.
+     */
+    private function link(string $accountId, ClickLinkToken $verified): LinkResult
+    {
+        $checked = $this->check($accountId, $verified, true);
+        if ($checked instanceof LinkResult) {
+            return $checked;
+        }
+        [$installation, $profile] = $checked;
+
+        $matched = false;
+        if (!$installation->allowUnverifiedLinkConfirm) {
+            $refusal = $this->emailRefusal($accountId, $verified, $profile);
+            if ($refusal instanceof LinkResult) {
+                return $refusal;
+            }
+            $matched = true;
+        }
+
+        $holder = $this->identities->findLinkBySlackUser($verified->team, $verified->user);
+        if ($holder instanceof SlackLink && $holder->accountId !== $accountId && !$matched) {
+            // Only an unverified claim yields, and only to a proven (e-mail matched) link.
+            return LinkResult::InUse;
+        }
+        if (!$this->claim($verified)) {
+            return LinkResult::LinkExpired;
+        }
+        if ($holder instanceof SlackLink && $holder->accountId !== $accountId) {
+            // @igor-ignore - Host identity store write (persistent storage), not in-process state.
+            $this->identities->removeLinkIn($holder->accountId, $verified->team);
+            $this->events?->dispatch(new SlackLinkReleasedEvent($holder->accountId, $accountId, $verified->user->value, 'claimed_by_click'));
+        }
+
+        $now = DateTimeImmutable::createFromInterface($this->clock->now());
+        try {
+            $this->identities->saveLink(new SlackLink($accountId, $verified->team, $verified->user, $now, $now, SlackLink::SOURCE_CLICK));
+        } catch (SlackIdentityConflictException) {
+            return LinkResult::InUse; // The store refuses a pair another account holds (contract).
+        }
+        $this->events?->dispatch(new SlackAccountVerifiedEvent($accountId, $verified->team->value, $verified->user->value));
+        $this->events?->dispatch(new SlackIdentityLinkedEvent($accountId, $verified->team->value, $verified->user->value, $verified->installation, $matched));
+        $this->logger->info('Slack identity linked from a click.', ['team' => $verified->team->value, 'email_matched' => $matched]);
+        $this->notify($accountId, $verified, $installation);
+
+        return LinkResult::Linked;
+    }
+
+    /**
+     * Why the member's Slack e-mail does not prove the account, or null when it does.
+     */
+    private function emailRefusal(string $accountId, ClickLinkToken $verified, SlackUserProfile $profile): ?LinkResult
+    {
+        if ($profile->emailConfirmed === false) {
+            return LinkResult::EmailUnconfirmed; // Slack says the member never confirmed that address (R2-L4).
+        }
+        if ($profile->email === null) {
+            return LinkResult::EmailUnavailable;
+        }
+        try {
+            $check = new SlackVerifiedEmailCheck($accountId, $profile->email);
+        } catch (InvalidArgumentException) {
+            return LinkResult::EmailUnavailable;
+        }
+        if (!$this->emails->isVerifiedEmailOf($check)) {
+            $this->logger->info('Slack link from a click refused.', ['team' => $verified->team->value, 'reason' => 'email_mismatch']);
+
+            return LinkResult::EmailMismatch;
+        }
+
+        return null;
+    }
+
+    /**
      * The checks shared by the page and the confirmation, then the member's profile.
      *
      * @return array{0: SlackInstallation, 1: SlackUserProfile}|LinkResult
      */
-    private function check(string $accountId, ClickLinkToken $token): array|LinkResult
+    private function check(string $accountId, ClickLinkToken $token, bool $countAttempt): array|LinkResult
     {
         if (!$this->identities->isAccountActive($accountId)) {
             return LinkResult::Unavailable;
@@ -226,7 +289,7 @@ final readonly class ClickLinker implements ClickLinkerInterface
         if (!$installation instanceof SlackInstallation || $installation->isRevoked() || !$token->installation->admits($installation)) {
             return LinkResult::Unavailable;
         }
-        if (!$this->limiter->create('account:' . hash('sha256', $accountId))->consume()->isAccepted()) {
+        if ($countAttempt && !$this->limiter->create('account:' . hash('sha256', $accountId))->consume()->isAccepted()) {
             return LinkResult::RateLimited;
         }
         $holder = $this->identities->findLinkBySlackUser($token->team, $token->user);
@@ -264,17 +327,32 @@ final readonly class ClickLinker implements ClickLinkerInterface
      */
     private function notify(string $accountId, ClickLinkToken $token, SlackInstallation $installation): void
     {
-        $text   = $this->trans('slack.linked_dm.text', ['%account%' => $this->identities->accountLabel($accountId), '%team%' => $installation->teamName ?? $token->team->value]);
-        $blocks = [Blocks::section($text)];
+        $text = $this->trans('slack.linked_dm.text', ['%account%' => $this->label($accountId), '%team%' => $installation->teamName ?? $token->team->value]);
+        // Plain text (R2-L3): no mrkdwn, mentions or links from the account label or the workspace name.
+        $blocks = [['type' => 'section', 'text' => ['type' => 'plain_text', 'text' => Blocks::truncate($text, Blocks::MAX_SECTION_TEXT), 'emoji' => false]]];
         if ($this->manageRoute !== null) {
             $blocks[] = Blocks::actions([Blocks::linkButton($this->trans('slack.linked_dm.unlink', []), $this->urls->generate($this->manageRoute, [], UrlGeneratorInterface::ABSOLUTE_URL), 'nowo_slack_kit.link.manage', $this->allowHttp)]);
         }
         try {
             $channel = $this->api->openDirectMessage($token->installation, $token->user);
-            $this->api->postMessage($token->installation, $channel, new SlackMessage($text, $blocks));
+            $this->api->postMessage($token->installation, $channel, new SlackMessage($this->trans('slack.confirm.linked', []), $blocks));
         } catch (SlackApiException $e) {
             $this->logger->info('Slack link notice failed.', ['team' => $token->team->value, 'error' => $e->errorCode]);
         }
+    }
+
+    /**
+     * The host's account label, or a neutral one when it looks like an e-mail, a link or holds control characters
+     * (audit R2-L3, Beacon Q9: a display name, never an e-mail); at most {@see self::MAX_LABEL} characters.
+     */
+    private function label(string $accountId): string
+    {
+        $label = trim($this->identities->accountLabel($accountId));
+        if ($label === '' || str_contains($label, '@') || str_contains($label, '://') || preg_match('/^[^\p{C}]+$/u', $label) !== 1) {
+            return $this->trans('slack.linked_dm.your_account', []);
+        }
+
+        return mb_strlen($label) > self::MAX_LABEL ? mb_substr($label, 0, self::MAX_LABEL - 1) . '…' : $label;
     }
 
     /**

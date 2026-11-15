@@ -7,6 +7,7 @@ namespace Nowo\SlackKitBundle\Tests\Support;
 use Nowo\SlackKitBundle\Id\SlackTeamId;
 use Nowo\SlackKitBundle\Id\SlackUserId;
 use Nowo\SlackKitBundle\Linking\SlackAccountResolverInterface;
+use Nowo\SlackKitBundle\Linking\SlackIdentityConflictException;
 use Nowo\SlackKitBundle\Linking\SlackIdentityLinksInterface;
 use Nowo\SlackKitBundle\Linking\SlackLink;
 use Nowo\SlackKitBundle\Linking\SlackVerifiedEmailCheck;
@@ -92,9 +93,9 @@ final class FakeIdentityLinks implements SlackIdentityLinksInterface, SlackAccou
 
     public function saveLink(SlackLink $link): void
     {
-        foreach ($this->links as $key => $existing) {
+        foreach ($this->links as $existing) {
             if ($existing->team->equals($link->team) && $existing->slackUserId->equals($link->slackUserId) && $existing->accountId !== $link->accountId) {
-                unset($this->links[$key]);
+                throw new SlackIdentityConflictException('The pair belongs to another account.'); // Never replace (R2-M1).
             }
         }
         $this->links[$link->accountId . '|' . $link->team->value] = $link;

@@ -7,6 +7,7 @@ namespace Nowo\SlackKitBundle\Test;
 use DateTimeImmutable;
 use Nowo\SlackKitBundle\Id\SlackTeamId;
 use Nowo\SlackKitBundle\Id\SlackUserId;
+use Nowo\SlackKitBundle\Linking\SlackIdentityConflictException;
 use Nowo\SlackKitBundle\Linking\SlackIdentityLinksInterface;
 use Nowo\SlackKitBundle\Linking\SlackLink;
 use PHPUnit\Framework\TestCase;
@@ -45,6 +46,29 @@ abstract class SlackIdentityLinksContractTestCase extends TestCase
         }
         self::assertSame(['T00000000' => 'U00000001', 'T00000001' => 'U00000008'], $ids, 'saving replaces the link of that workspace only');
         self::assertNull($store->findLinkBySlackUser(SlackTeamId::fromString('T00000001'), SlackUserId::fromString('U00000009')));
+    }
+
+    /**
+     * Saving a (workspace, member) pair another account holds is refused, never a replacement (audit R2-M1).
+     */
+    public function testAPairOfAnotherAccountIsNeverReplaced(): void
+    {
+        $store = $this->createEmptyStore();
+        $store->saveLink($this->link('account-1', 'T00000000', 'U00000001'));
+
+        $refused = false;
+        try {
+            $store->saveLink($this->link('account-2', 'T00000000', 'U00000001'));
+        } catch (SlackIdentityConflictException) {
+            $refused = true;
+        }
+        self::assertTrue($refused, 'saveLink() must refuse a pair held by another account.');
+        self::assertSame('account-1', $store->findLinkBySlackUser(SlackTeamId::fromString('T00000000'), SlackUserId::fromString('U00000001'))?->accountId);
+        self::assertSame([], $store->linksOf('account-2'));
+
+        $store->removeLinkIn('account-1', SlackTeamId::fromString('T00000000'));
+        $store->saveLink($this->link('account-2', 'T00000000', 'U00000001'));
+        self::assertSame('account-2', $store->findLinkBySlackUser(SlackTeamId::fromString('T00000000'), SlackUserId::fromString('U00000001'))?->accountId, 'after an explicit release');
     }
 
     /**

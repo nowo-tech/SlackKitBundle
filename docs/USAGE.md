@@ -382,14 +382,22 @@ shows the workspace and the member's Slack display name, and *Confirm* links the
 - the member's e-mail, read with `users.info` through that installation (`users:read.email`), is a **verified** e-mail
   of the signed-in account (your `SlackVerifiedEmailCheckerInterface`); an installation may opt in to
   `allowUnverifiedLinkConfirm` (off by default; warn the admin: a forwarded link could then be confirmed by anyone);
+- Slack does not report the member's e-mail as unconfirmed (`is_email_confirmed: false` is refused); only
+  printable-ASCII addresses are compared, lower-cased (compare with your own ASCII-lower-cased verified addresses);
 - no other account holds that identity verified (an unverified claim yields only to an e-mail-proven link);
 - the account has no other identity in that workspace (unlink it first).
 
 The member then gets a DM "Your Slack account in <workspace> is now linked to <account>. Not you? Unlink it." with a
 button to `manage_route`. `<account>` is `SlackIdentityLinksInterface::accountLabel()`: return the account's display
-name, **never an e-mail** (the DM is readable by whoever reads that Slack member's messages). The offer text names the
+name, **never an e-mail** (a label with `@`, `://` or control characters is replaced by "your account", long labels are
+cut at 80 characters, and the DM is plain text) (the DM is readable by whoever reads that Slack member's messages). The offer text names the
 configured `linking.from_click.ttl` (in minutes, or seconds when it is not a whole number of minutes). Links are never offered for clicks verified with a host-resolved or own-app secret, nor for
 legacy values: their member id may be chosen by whoever holds the secret.
+
+Confirmations run under locks on (workspace, member) and (account, workspace) taken from
+`ingress.replay_lock_factory` (a shared store in production); a concurrent confirmation answers *try again*. Your
+`saveLink()` must **refuse** a (workspace, member) pair another account holds by throwing
+`SlackIdentityConflictException` (map your unique-key violation to it), never replace it.
 
 **Standard Symfony host:** an entity `SlackIdentity` (account, team id, Slack user id, linked at, source) with a unique
 (team id, Slack user id) and (account, team id), a repository implementing `SlackIdentityLinksInterface`, and your user

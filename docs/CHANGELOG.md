@@ -53,6 +53,11 @@ task T000b.
 - `SlackUserDirectoryInterface::userProfile()` (`users.info`, public alias) and `SlackUserProfile`;
   `SlackInstallation::$allowUnverifiedLinkConfirm`; `SlackLink::SOURCE_CLICK`; `LinkResult` cases `Linked`,
   `LinkExpired`, `EmailMismatch`, `EmailUnavailable`, `AlreadyLinkedInWorkspace`; translations in 7 locales.
+- Audit PZ round 2: confirmations run under (workspace, member) and (account, workspace) locks and re-read inside
+  them; `saveLink()` refuses a pair held by another account (`SlackIdentityConflictException`, contract test); the
+  token is claimed after the checks; ASCII-only e-mail checks; `is_email_confirmed: false` refused
+  (`LinkResult::EmailUnconfirmed`, `SlackUserProfile::$emailConfirmed`); sanitised plain-text DM label; the page no
+  longer counts against the per-account limit.
 - The "Link my account" offer names the configured link lifetime (`linking.from_click.ttl`, in minutes or seconds),
   pluralised in the 7 locales.
 

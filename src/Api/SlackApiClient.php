@@ -21,6 +21,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 use function ctype_digit;
 use function in_array;
 use function is_array;
+use function is_bool;
 use function is_string;
 use function json_decode;
 use function max;
@@ -171,7 +172,9 @@ final readonly class SlackApiClient implements SlackApiClientInterface, SlackUse
         }
         $email = is_string($profile['email'] ?? null) && trim($profile['email']) !== '' ? trim($profile['email']) : null;
 
-        return new SlackUserProfile($user, $name !== '' ? $name : $user->value, $email, ($member['is_bot'] ?? false) === true, ($member['deleted'] ?? false) === true);
+        $confirmed = $member['is_email_confirmed'] ?? null;
+
+        return new SlackUserProfile($user, $name !== '' ? $name : $user->value, $email, ($member['is_bot'] ?? false) === true, ($member['deleted'] ?? false) === true, is_bool($confirmed) ? $confirmed : null);
     }
 
     /**

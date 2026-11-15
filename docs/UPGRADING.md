@@ -42,7 +42,8 @@ To link identities from clicks:
 
 1. Implement `SlackIdentityLinksInterface` on your identity store (one row per account and workspace, unique
    (workspace, member), exact comparison; `findLinkByAccount()` / `removeLink()` keep acting on the default
-   installation's workspace) and extend `SlackIdentityLinksContractTestCase`. Beacon migrates `User::$slackUserId` into
+   installation's workspace; `saveLink()` throws `SlackIdentityConflictException` for a pair another account holds,
+   never replaces it) and extend `SlackIdentityLinksContractTestCase`. Beacon migrates `User::$slackUserId` into
    that table as the identity of the default installation.
 2. Implement `SlackVerifiedEmailCheckerInterface` (verified e-mails only).
 3. Configure `linking.from_click` (`enabled`, `email_checker`, `manage_route`, optionally `layout`), grant the Slack app

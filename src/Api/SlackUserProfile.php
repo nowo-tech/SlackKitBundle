@@ -18,6 +18,7 @@ final readonly class SlackUserProfile
      * @param string|null $email profile e-mail, when the installation may read it
      * @param bool $bot the member is a bot
      * @param bool $deleted the member is deactivated
+     * @param bool|null $emailConfirmed Slack's `is_email_confirmed`, null when Slack does not say
      */
     public function __construct(
         public SlackUserId $user,
@@ -25,6 +26,7 @@ final readonly class SlackUserProfile
         public ?string $email = null,
         public bool $bot = false,
         public bool $deleted = false,
+        public ?bool $emailConfirmed = null,
     ) {
     }
 }

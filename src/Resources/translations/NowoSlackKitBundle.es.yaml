@@ -50,6 +50,7 @@ link:
         link_expired: "Este enlace de Slack no es válido, ha caducado o ya se usó. Vuelve a pulsar el botón en Slack."
         email_mismatch: "Tu e-mail de Slack no es un e-mail verificado de esta cuenta, así que se rechazó el vínculo. Entra con la cuenta que corresponde o verifica antes ese e-mail."
         email_unavailable: "Slack no comparte el e-mail de este miembro, así que no se puede comprobar el vínculo. Consulta a un administrador."
+        email_unconfirmed: "Slack indica que tu e-mail de Slack no está confirmado. Confírmalo en Slack y vuelve a pulsar el botón."
         already_linked_in_workspace: "Tu cuenta ya está vinculada a otro miembro de Slack en este espacio de trabajo. Desvincúlalo primero."
 slack:
     confirm:
@@ -61,6 +62,7 @@ slack:
         text_seconds: "Vincula tu cuenta para actuar desde Slack. Este enlace es solo para ti y caduca en %count% segundos."
         button: "Vincular mi cuenta"
     linked_dm:
+        your_account: "tu cuenta"
         text: "Tu cuenta de Slack en %team% está ahora vinculada a %account%. ¿No eres tú? Desvincúlala."
         unlink: "Desvincular"
 interaction:

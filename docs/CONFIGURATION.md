@@ -370,7 +370,7 @@ dispatches `SlackConfirmationRateLimitedEvent`.
 Link-from-click (spec 237 T000b, [USAGE.md](USAGE.md#identities-per-workspace-and-linking-from-a-click-14)). Needs
 `linking.enabled`, an `identity_store` implementing `SlackIdentityLinksInterface`, an `account_resolver` and
 `email_checker`; the build fails otherwise. Routes under `{ui.prefix}/account/slack`: `GET|POST /link/{token}`,
-`POST /unlink/{team}`. The single-use claim uses `ingress.replay_lock_factory`; the limiter uses
+`POST /unlink/{team}`. The single-use claim and the confirmation locks use `ingress.replay_lock_factory`; the limiter (confirmations only) uses
 `rate_limiter_cache_pool`. The Slack app needs `users:read` (and `users:read.email` unless every installation opts in
 to `allowUnverifiedLinkConfirm`).
 

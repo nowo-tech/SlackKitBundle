@@ -50,6 +50,7 @@ link:
         link_expired: "Deze Slack-link is ongeldig, verlopen of al gebruikt. Klik opnieuw op de knop in Slack."
         email_mismatch: "Je Slack-e-mail is geen geverifieerd e-mailadres van dit account, dus de koppeling is geweigerd. Log in met het juiste account of verifieer dat e-mailadres eerst."
         email_unavailable: "Slack deelt het e-mailadres van dit lid niet, dus de koppeling kan niet worden gecontroleerd. Vraag een beheerder."
+        email_unconfirmed: "Volgens Slack is je Slack-e-mailadres niet bevestigd. Bevestig het in Slack en klik dan opnieuw op de knop."
         already_linked_in_workspace: "Je account is in deze workspace al gekoppeld aan een ander Slack-lid. Ontkoppel dat eerst."
 slack:
     confirm:
@@ -61,6 +62,7 @@ slack:
         text_seconds: "Koppel je account om vanuit Slack te handelen. Deze link is alleen voor jou en verloopt over %count% seconden."
         button: "Mijn account koppelen"
     linked_dm:
+        your_account: "je account"
         text: "Je Slack-account in %team% is nu gekoppeld aan %account%. Ben jij dit niet? Ontkoppel het."
         unlink: "Ontkoppelen"
 interaction:

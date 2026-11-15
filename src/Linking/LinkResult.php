@@ -35,6 +35,9 @@ enum LinkResult: string
     /** 1.4: Slack does not tell the member's e-mail (no `users:read.email`, or none set). */
     case EmailUnavailable = 'email_unavailable';
 
+    /** 1.4: Slack reports the member's e-mail as not confirmed (`is_email_confirmed: false`). */
+    case EmailUnconfirmed = 'email_unconfirmed';
+
     /** 1.4: the account already holds another identity in that workspace (unlink it first). */
     case AlreadyLinkedInWorkspace = 'already_linked_in_workspace';
 

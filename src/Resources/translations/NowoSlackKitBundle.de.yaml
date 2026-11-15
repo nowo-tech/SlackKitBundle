@@ -50,6 +50,7 @@ link:
         link_expired: "Dieser Slack-Link ist ungültig, abgelaufen oder schon benutzt. Klicke in Slack erneut auf die Schaltfläche."
         email_mismatch: "Deine Slack-E-Mail ist keine bestätigte E-Mail dieses Kontos, daher wurde die Verknüpfung abgelehnt. Melde dich mit dem passenden Konto an oder bestätige zuerst diese E-Mail."
         email_unavailable: "Slack gibt die E-Mail dieses Mitglieds nicht frei, daher kann die Verknüpfung nicht geprüft werden. Wende dich an einen Administrator."
+        email_unconfirmed: "Laut Slack ist deine Slack-E-Mail nicht bestätigt. Bestätige sie in Slack und klicke dann erneut auf die Schaltfläche."
         already_linked_in_workspace: "Dein Konto ist in diesem Workspace bereits mit einem anderen Slack-Mitglied verknüpft. Löse diese Verknüpfung zuerst."
 slack:
     confirm:
@@ -61,6 +62,7 @@ slack:
         text_seconds: "Verknüpfe dein Konto, um in Slack zu handeln. Dieser Link gilt nur für dich und läuft in %count% Sekunden ab."
         button: "Mein Konto verknüpfen"
     linked_dm:
+        your_account: "dein Konto"
         text: "Dein Slack-Konto in %team% ist jetzt mit %account% verknüpft. Nicht du? Löse die Verknüpfung."
         unlink: "Verknüpfung lösen"
 interaction:
