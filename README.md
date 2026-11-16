@@ -13,7 +13,9 @@ Symfony Notifier chat transport.
 
 > 📋 **Compatible with Symfony 7.4+ and 8.x** (PHP 8.2+; Symfony 8.x requires PHP 8.4+)
 
-**FrankenPHP worker mode friendly.** Every service is stateless (`final readonly`) or implements `ResetInterface`;
+![FrankenPHP Friendly Worker Mode](docs/images/frankenphp-friendly.png)
+
+This bundle is **FrankenPHP worker mode friendly**. Every service is stateless (`final readonly`) or implements `ResetInterface`;
 credentials are read from the installation store on each call and never memoised across requests; the only
 per-request buffer (deferred Slack answers) is flushed on `kernel.terminate` and reset by `kernel.reset`. See
 [docs/FRANKENPHP-WORKER-AUDIT.md](docs/FRANKENPHP-WORKER-AUDIT.md).
@@ -267,7 +269,7 @@ make release-check
   build-time refusals, Notifier transport, Messenger middleware) and kernel integration tests (settings section with
   CSRF and *Test connection*, account card end to end with a signed click on the ingress, ingress routes); Playwright
   e2e on the demo.
-- PHP: coverage gate in CI (`composer test-coverage-100`), target 100 %.
+- PHP: 100% (2592/2592 lines, 422/422 methods, 105/105 classes; 446 tests, CI run of `0a8ff23`); gate enforced in CI by `composer test-coverage-100`.
 - Fakes only: bot token `xoxb-test-not-a-real-token`, team `T00000000`, users `U00000001`…, e-mails `@example.test`.
 - TS/JS: N/A · Python: N/A
 

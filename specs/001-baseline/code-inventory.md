@@ -1,6 +1,6 @@
 # Code inventory — 001-baseline
 
-**Last audited**: 2026-11-05 (SEC-004 FS fixes)
+**Last audited**: 2026-11-16 (sweep: 2026-11-05 baseline + later sources) (SEC-004 FS fixes)
 **Scope**: every production file under `src/` (94 files, `find src -type f | wc -l`). Tests, demo and generated caches are out of scope.
 
 ## Bundle / DI
@@ -166,3 +166,51 @@
 | `src/Resources/translations/NowoSlackKitBundle.it.yaml` | Translations | FR-I18N-001 |
 | `src/Resources/translations/NowoSlackKitBundle.nl.yaml` | Translations | FR-I18N-001 |
 | `src/Resources/translations/NowoSlackKitBundle.pt.yaml` | Translations | FR-I18N-001 |
+
+## Sources added after the last baseline review (sweep 2026-11-16)
+
+These 41 `src/` files were added by releases after the last review. Each row maps the file to the requirement already used for its neighbours in the same directory; the description comes from the class docblock. With them, every file under `src/` is listed in this inventory.
+
+| Source file | Spec section | Requirement IDs |
+| --- | --- | --- |
+| `src/Api/ResponseUrlClient.php` | Web API client: Posts to an interaction `response_url` (`https://hooks.slack.com/actions/…` only, enforced by SlackSecret::responseUr... | FR-API-001 |
+| `src/Api/ResponseUrlClientInterface.php` | Web API client: Answers an interaction through its `response_url` (spec 237 T000c): no bot token, valid for 30 minutes after the click. | FR-API-001 |
+| `src/Api/SlackResponseUrlReply.php` | Web API client: What to send to an interaction's `response_url` (spec 237 T000c): an ephemeral message for the clicker, a replacement... | FR-API-001 |
+| `src/Api/SlackUserDirectoryInterface.php` | Web API client: `users.info` through one installation (1.4, link-from-click). | FR-API-001 |
+| `src/Api/SlackUserProfile.php` | Web API client: What `users.info` says about a member (spec 237 FR-011 / FR-012): the name to show, the e-mail (only with `users:read... | FR-API-001 |
+| `src/BlockKit/MessageUpdate.php` | Block Kit builder: Rebuilds a clicked message without its spent buttons and with a context line such as "Assigned to Ana" (spec 237 T000... | FR-BK-001 |
+| `src/Controller/ClickLinkController.php` | UI and controllers: Link-from-click pages (1.4, spec 237 FR-011 / FR-013): `GET …/link/{token}` shows the workspace and the Slack member... | FR-UI-001 |
+| `src/Credentials/InMemoryInstallationBindingStore.php` | Credentials and stores: Bindings kept in memory (tests and demos only, with `credentials.store: memory`). | FR-CRED-001 |
+| `src/Credentials/InMemoryInstallationStoreBoundaryListener.php` | Credentials and stores: Starts every unit of work with the initial state of the `memory` installation store (REQ-RUNTIME-002). | FR-CRED-001 |
+| `src/Credentials/SlackInstallationBinding.php` | Credentials and stores: Gives an owner scope the use of an installation (spec 237 FR-001): two organizations in the same workspace share one... | FR-CRED-001 |
+| `src/Credentials/SlackInstallationBindingStoreInterface.php` | Credentials and stores: Where bindings between installations and owner scopes live (spec 237 FR-001; `installations.binding_store`). | FR-CRED-001 |
+| `src/Credentials/SlackOwnerScope.php` | Credentials and stores: Who may use an installation, in the host's own terms (spec 237 FR-001): a type such as `instance`, `organization` or... | FR-CRED-001 |
+| `src/DependencyInjection/Compiler/LinkingLimiterPoolPass.php` | Bundle / DI: Audit IL-L2: the linking rate limiters must keep their counters. | FR-DI-002 |
+| `src/Event/SlackIdentityLinkedEvent.php` | Events: A Slack identity was linked to an account from a click (1.4, spec 237 FR-011): dispatched after the identity store sa... | FR-EVT-001 |
+| `src/Event/SlackInstallationCompletedEvent.php` | Events: An "Add to Slack" install finished: the installation was saved (a re-install updated its token) and bound to the owne... | FR-EVT-001 |
+| `src/Id/SlackEnterpriseId.php` | Identifiers: A Slack Enterprise Grid organisation id (`E…`), part of an installation key when the workspace belongs to a grid. | FR-API-002 |
+| `src/Install/InstallController.php` | "Add to Slack" (OAuth v2, spec 237 FR-003). | FR-INSTALL-001 |
+| `src/Install/InstallStateStore.php` | The `state` of "Add to Slack" (spec 237 FR-003): a random nonce MAC-signed with a key derived from `kernel.secret`, w... | FR-INSTALL-001 |
+| `src/Install/SlackInstallAttempt.php` | Someone wants to install an app for an owner scope ("Add to Slack", spec 237 FR-003): what SlackInstallAuthorizerInte... | FR-INSTALL-001 |
+| `src/Install/SlackInstallAuthorizerInterface.php` | Host hook that decides who may install an app for an owner scope (`installations.oauth.authorizer`, spec 237 FR-003). | FR-INSTALL-001 |
+| `src/Install/SlackOAuthClient.php` | `oauth.v2.access` on `https://slack.com/api/` only: client credentials in the HTTP Basic header, no redirects, timeou... | FR-INSTALL-001 |
+| `src/Install/SlackOAuthClientInterface.php` | Exchanges the one-time code of an "Add to Slack" callback for the installation's grant (`oauth.v2.access`). | FR-INSTALL-001 |
+| `src/Install/SlackOAuthExchange.php` | The `oauth.v2.access` exchange of an "Add to Slack" callback: the app's client credentials, the one-time code and the... | FR-INSTALL-001 |
+| `src/Install/SlackOAuthGrant.php` | What `oauth.v2.access` granted, validated: the bot token (null when Slack returned something else, such as a rotating... | FR-INSTALL-001 |
+| `src/Interaction/ButtonValueCodecInterface.php` | Interactions router and nsk1 values: Signs and verifies `nsk1` button values (1.2, DDD P2). | FR-INT-001 |
+| `src/Interaction/SlackActorCandidate.php` | Interactions router and nsk1 values: A verified, active link about to become the actor of a click (spec 237, audit PZ-M1): what SlackActorFilterInterface... | FR-INT-001 |
+| `src/Interaction/SlackActorFilterInterface.php` | Interactions router and nsk1 values: Optional host hook (`installations.actor_filter`, spec 237 / audit PZ-M1): the last word on whether a verified, activ... | FR-INT-001 |
+| `src/Interaction/SlackOriginalMessage.php` | Interactions router and nsk1 values: The clicked message as Slack sent it in the verified payload (`message.text`, `message.blocks`): what MessageUpdate r... | FR-INT-001 |
+| `src/Linking/AccountLinkerInterface.php` | Account linking: The account-linking state machine (1.2, DDD P2). | FR-LINK-001 |
+| `src/Linking/ClickLinkPreview.php` | Account linking: What the link-from-click confirmation page shows (spec 237 FR-011): the workspace and the Slack member, by name. | FR-LINK-001 |
+| `src/Linking/ClickLinkSigner.php` | Account linking: Signs and verifies link-from-click tokens (spec 237 FR-011): `<payload>.<mac>`, base64url, HMAC-SHA256 with a key der... | FR-LINK-001 |
+| `src/Linking/ClickLinkToken.php` | Account linking: A verified link-from-click token (spec 237 FR-011): which member of which workspace, through which installation, unti... | FR-LINK-001 |
+| `src/Linking/ClickLinker.php` | Account linking: Link-from-click (spec 237 T000b, FR-010 – FR-013). | FR-LINK-001 |
+| `src/Linking/ClickLinkerInterface.php` | Account linking: Several identities per account and linking from a click (1.4, spec 237 T000b). | FR-LINK-001 |
+| `src/Linking/SlackIdentityConflictException.php` | Account linking: Thrown by SlackIdentityLinksInterface::saveLink() when another account holds the (workspace, member) pair: a store re... | FR-LINK-001 |
+| `src/Linking/SlackIdentityLinksInterface.php` | Account linking: Several Slack identities per account, one per workspace (spec 237 FR-010, 1.4). | FR-LINK-001 |
+| `src/Linking/SlackVerifiedEmailCheck.php` | Account linking: Does this account own this e-mail, verified? | FR-LINK-001 |
+| `src/Linking/SlackVerifiedEmailCheckerInterface.php` | Account linking: Host port of link-from-click (`linking.from_click.email_checker`, spec 237 FR-012): whether the e-mail is a **verifie... | FR-LINK-001 |
+| `src/Test/SlackIdentityLinksContractTestCase.php` | The contract of an identity store with several identities per account (1.4, spec 237 FR-010): extend it in your test... | FR-CRED-002 |
+| `src/Test/SlackInstallationBindingStoreContractTestCase.php` | The binding store contract (spec 237 FR-001, `installations.binding_store`): extend it in your test suite and return... | FR-CRED-002 |
+| `src/Test/SlackMultiInstallationStoreContractTestCase.php` | The contract of an installation store that keeps several workspaces (spec 237: "Add to Slack" and own apps). | FR-CRED-002 |
