@@ -108,6 +108,12 @@ shared lock store (a local store fails the build outside debug and test).
 | FR-UI-003 | Account link card and Twig functions |
 | FR-I18N-001 | Domain `NowoSlackKitBundle` in en, es, it, fr, pt, de, nl with key parity |
 
+### Requirements added by the inventory sweep (2026-11-16)
+
+Areas introduced by releases after the baseline review; each requirement names the area and what its main source does (class docblock).
+
+- **FR-INSTALL-001** `src/Install/`: "Add to Slack" (OAuth v2, spec 237 FR-003).
+
 ## Success criteria
 
 - PHPUnit line coverage 100 % (gate 100 %), PHPStan level 8 with empty `ignoreErrors`, igor clean, Rector clean.

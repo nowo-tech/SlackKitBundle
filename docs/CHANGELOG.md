@@ -33,6 +33,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- README: FrankenPHP Friendly Worker Mode banner (REQ-DOCS-017) and the measured PHP coverage (REQ-TEST-007)
+- Spec Kit: the 41 `src/` files added since the baseline review are mapped in `code-inventory.md` (REQ-SPECKIT-001 / REQ-SPECKIT-003)
+
 ## [1.4.0] - 2026-11-15
 
 Target: **1.4.0** (minor; no breaking change, see [UPGRADING.md](UPGRADING.md#to-140)). Symfony Beacon spec 237,
