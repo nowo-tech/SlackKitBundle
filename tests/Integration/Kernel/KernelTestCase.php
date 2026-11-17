@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Nowo\SlackKitBundle\Tests\Integration\Kernel;
 
+use Closure;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
@@ -23,6 +24,7 @@ use Nowo\SlackKitBundle\Tests\Support\TokenAccountResolver;
 use Nowo\SlackKitBundle\Tests\Support\UpdatingHandler;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ReferenceConfigurator;
@@ -51,8 +53,9 @@ abstract class KernelTestCase extends TestCase
     /**
      * @param array<string, mixed> $config nowo_slack_kit configuration
      * @param array<string, mixed> $framework extra FrameworkBundle configuration
+     * @param (Closure(ContainerBuilder): void)|null $build hook to add compiler passes
      */
-    protected function bootKernel(array $config = [], string $environment = 'test', array $framework = []): SlackKitTestKernel
+    protected function bootKernel(array $config = [], string $environment = 'test', array $framework = [], ?Closure $build = null): SlackKitTestKernel
     {
         $id     = (string) preg_replace('/\W+/', '_', static::class . '_' . $this->name() . '_' . count($this->kernels));
         $kernel = new SlackKitTestKernel(
@@ -84,6 +87,7 @@ abstract class KernelTestCase extends TestCase
             },
             $environment,
             $framework,
+            $build,
         );
         $this->kernels[] = $kernel;
         $kernel->boot();
