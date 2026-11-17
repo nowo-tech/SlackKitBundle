@@ -38,7 +38,7 @@ help:
 	@echo "  qa            Run all QA checks (cs-check + test)"
 	@echo "  release-check Pre-release: ensure-up, co-author/open-PR/raw-form checks, composer-sync, cs-fix, cs-check, rector-dry, phpstan, validate-phpdoc, igor, validate-translations, test-coverage + 100% gate, demos (+ e2e)"
 	@echo "  check-no-raw-html-form No raw <form>/<input>/<textarea>/<select> in bundle or demo Twig (REQ-TWIG-005)"
-	@echo "  check-twig-extra       No-op: the bundle ships no Twig (REQ-TWIG-004)"
+	@echo "  check-twig-extra       twig/extra-bundle + twig/string-extra required, demo registers TwigExtraBundle (REQ-TWIG-004)"
 	@echo "  validate-translations  YAML syntax + key parity of the 7 locales (REQ-MAKE-004 / REQ-I18N-002)"
 	@echo "  test-with-db           Integration suite (Doctrine on SQLite in the php container; REQ-TEST-005)"
 	@echo "  test-coverage-with-db  Integration suite with text coverage (REQ-TEST-005)"
@@ -161,7 +161,7 @@ release-check:
 	@$(MAKE) release-check-demos
 	@$(MAKE) test-e2e
 
-# REQ-TWIG-004: not applicable (no bundle Twig); the script exits 0 when the package ships no templates.
+# REQ-TWIG-004: the bundle ships Twig (account/_link.html.twig); the script fails when Twig Extra is missing.
 check-twig-extra:
 	@chmod +x .scripts/check-twig-extra.sh
 	@./.scripts/check-twig-extra.sh
