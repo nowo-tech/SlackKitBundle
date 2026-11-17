@@ -6,18 +6,22 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.5.0] - 2026-11-17](#150---2026-11-17)
+  - [Changed](#changed)
+  - [Demo](#demo)
+  - [Changed](#changed-1)
 - [[1.4.0] - 2026-11-15](#140---2026-11-15)
   - [Added (spec 237, T000b: identities per workspace, link from a click)](#added-spec-237-t000b-identities-per-workspace-link-from-a-click)
-  - [Changed](#changed)
+  - [Changed](#changed-2)
   - [Security](#security)
 - [[1.3.0] - 2026-11-14](#130---2026-11-14)
   - [Added (spec 237, T000a: several workspaces)](#added-spec-237-t000a-several-workspaces)
   - [Added (spec 237, T000c: message updates)](#added-spec-237-t000c-message-updates)
-  - [Changed](#changed-1)
+  - [Changed](#changed-3)
   - [Security](#security-1)
 - [[1.2.1] - 2026-11-12](#121---2026-11-12)
   - [Fixed](#fixed)
-  - [Changed](#changed-2)
+  - [Changed](#changed-4)
 - [[1.2.0] - 2026-11-10](#120---2026-11-10)
   - [Added](#added)
   - [Documentation](#documentation)
@@ -33,6 +37,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-17
+
 ### Changed
 
 - `EventsHandler` carries `#[AsMessageHandler]` and is registered through autoconfiguration (only with `ingress.async: true`) instead of an explicit `messenger.message_handler` tag (REQ-MSG-001); the handler is registered exactly as before.
@@ -47,6 +53,8 @@ All notable changes to this project are documented here. The format follows
 
 - README: FrankenPHP Friendly Worker Mode banner (REQ-DOCS-017) and the measured PHP coverage (REQ-TEST-007)
 - Spec Kit: the 41 `src/` files added since the baseline review are mapped in `code-inventory.md` (REQ-SPECKIT-001 / REQ-SPECKIT-003)
+
+[1.5.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.5.0
 
 ## [1.4.0] - 2026-11-15
 
@@ -479,5 +487,5 @@ Decided by the owner on 2026-11-05 so that Beacon's adoption is a no-op:
   (OAuth, 1.1). VarDumper and the profiler show `[redacted]` through `SlackSecret::__debugInfo()`; there is no
   separate caster.
 
-[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.5.0...HEAD
 [1.0.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.0.0
