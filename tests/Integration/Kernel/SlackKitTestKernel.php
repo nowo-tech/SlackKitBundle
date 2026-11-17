@@ -40,6 +40,7 @@ final class SlackKitTestKernel extends Kernel
      * @param Closure(ContainerConfigurator): void $services
      * @param Closure(RoutingConfigurator): void $routes
      * @param array<string, mixed> $framework extra FrameworkBundle configuration
+     * @param (Closure(ContainerBuilder): void)|null $build hook to add compiler passes (inspect the compiled container)
      */
     public function __construct(
         private readonly string $id,
@@ -47,6 +48,7 @@ final class SlackKitTestKernel extends Kernel
         private readonly Closure $routes,
         string $environment = 'test',
         private readonly array $framework = [],
+        private readonly ?Closure $build = null,
     ) {
         parent::__construct($environment, false);
     }
@@ -71,6 +73,9 @@ final class SlackKitTestKernel extends Kernel
      */
     protected function build(ContainerBuilder $container): void
     {
+        if ($this->build instanceof Closure) {
+            ($this->build)($container);
+        }
         $container->addCompilerPass(new class implements CompilerPassInterface {
             public function process(ContainerBuilder $container): void
             {

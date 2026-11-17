@@ -33,6 +33,11 @@ From **1.4.0**:
 composer update nowo-tech/slack-kit-bundle
 ```
 
+**New requirements.** The bundle ships a Twig template (REQ-TWIG-004), so 1.5.0 requires
+`twig/extra-bundle` (`^3.12`) and `twig/string-extra` (`^3.12`). `composer update` installs them; with Symfony Flex the
+`twig/extra-bundle` recipe registers `TwigExtraBundle`. Without Flex, register
+`Twig\Extra\TwigExtraBundle\TwigExtraBundle` in `config/bundles.php` yourself. No configuration change.
+
 ## To 1.4.0
 
 From **1.3.0**:
