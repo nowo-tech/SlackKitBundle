@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.5.1] - 2026-11-17](#151---2026-11-17)
   - [Tests](#tests)
   - [Documentation](#documentation)
 - [[1.5.0] - 2026-11-17](#150---2026-11-17)
@@ -38,6 +39,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-11-17
+
 ### Tests
 
 - Compiled-kernel test (`MessengerHandlerTest`): with `ingress.async: true`, `EventsHandler` (`#[AsMessageHandler]`) is tagged `messenger.message_handler` exactly once; with `ingress.async: false` (default) no handler is registered (audit SE follow-up).
@@ -46,6 +49,8 @@ All notable changes to this project are documented here. The format follows
 
 - UPGRADING: note the `twig/extra-bundle` and `twig/string-extra` requirements added in 1.5.0.
 - CHANGELOG: the duplicate `### Changed` heading of 1.5.0 is merged.
+
+[1.5.1]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.5.1
 
 ## [1.5.0] - 2026-11-17
 
@@ -494,5 +499,5 @@ Decided by the owner on 2026-11-05 so that Beacon's adoption is a no-op:
   (OAuth, 1.1). VarDumper and the profiler show `[redacted]` through `SlackSecret::__debugInfo()`; there is no
   separate caster.
 
-[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.5.1...HEAD
 [1.0.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.0.0
