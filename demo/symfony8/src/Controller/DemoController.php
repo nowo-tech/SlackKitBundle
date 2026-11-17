@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\FakeSlack\FakeSlackApi;
+use App\Form\DemoActionType;
 use App\Slack\DemoIdentityStore;
 use App\Slack\SlackClickSimulator;
 use Nowo\SlackKitBundle\Api\SlackApiClientInterface;
@@ -16,8 +17,6 @@ use Nowo\SlackKitBundle\Id\SlackChannelId;
 use Nowo\SlackKitBundle\Id\SlackTeamId;
 use Nowo\SlackKitBundle\Interaction\ButtonValueCodec;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\Form\Extension\Core\Type\HiddenType;
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -133,9 +132,11 @@ final class DemoController extends AbstractController
      */
     private function simpleForm(string $name, string $route, string $label): FormInterface
     {
-        return $this->forms->createNamedBuilder($name, options: ['action' => $this->generateUrl($route), 'csrf_token_id' => $name])
-            ->add('submit', SubmitType::class, ['label' => $label, 'attr' => ['class' => 'btn btn-outline-primary']])
-            ->getForm();
+        return $this->forms->createNamed($name, DemoActionType::class, null, [
+            'action' => $this->generateUrl($route),
+            'csrf_token_id' => $name,
+            'submit_label' => $label,
+        ]);
     }
 
     /**
@@ -143,10 +144,13 @@ final class DemoController extends AbstractController
      */
     private function clickForm(int $call, int $button): FormInterface
     {
-        return $this->forms->createNamedBuilder('click_' . $call . '_' . $button, options: ['action' => $this->generateUrl('demo_click', ['call' => $call, 'button' => $button]), 'csrf_token_id' => 'demo_click'])
-            ->add('confirm', HiddenType::class, ['data' => '1'])
-            ->add('submit', SubmitType::class, ['label' => 'Click as the linked member', 'attr' => ['class' => 'btn btn-sm btn-primary']])
-            ->getForm();
+        return $this->forms->createNamed('click_' . $call . '_' . $button, DemoActionType::class, null, [
+            'action' => $this->generateUrl('demo_click', ['call' => $call, 'button' => $button]),
+            'csrf_token_id' => 'demo_click',
+            'with_confirm' => true,
+            'submit_label' => 'Click as the linked member',
+            'submit_class' => 'nowo-ui-btn nowo-ui-btn--sm nowo-ui-btn--primary',
+        ]);
     }
 
     /**

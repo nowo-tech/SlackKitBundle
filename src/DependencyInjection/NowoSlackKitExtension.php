@@ -31,7 +31,6 @@ use Nowo\SlackKitBundle\Credentials\SlackInstallationBindingStoreInterface;
 use Nowo\SlackKitBundle\Credentials\SlackInstallationKey;
 use Nowo\SlackKitBundle\Credentials\SlackInstallationStoreInterface;
 use Nowo\SlackKitBundle\Ingress\EventsHandler;
-use Nowo\SlackKitBundle\Ingress\HandleSlackEvent;
 use Nowo\SlackKitBundle\Ingress\IngressController;
 use Nowo\SlackKitBundle\Ingress\ReplayGuard;
 use Nowo\SlackKitBundle\Ingress\SignatureVerifier;
@@ -500,7 +499,8 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
             $bindings ? new Reference(SlackInstallationBindingStoreInterface::class) : null,
         ]));
         if ($ingress['async']) {
-            $events->addTag('messenger.message_handler', ['handles' => HandleSlackEvent::class]);
+            // REQ-MSG-001: registered as a Messenger handler only with `ingress.async: true`, from its #[AsMessageHandler].
+            $events->setAutoconfigured(true);
         }
         $container->setDefinition(EventsHandler::class, $events);
         $container->setDefinition(IngressController::class, (new Definition(IngressController::class, [

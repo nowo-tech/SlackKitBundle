@@ -15,6 +15,7 @@ use Nowo\SlackKitBundle\Id\SlackEnterpriseId;
 use Nowo\SlackKitBundle\Id\SlackTeamId;
 use Psr\Clock\ClockInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 use function in_array;
 use function is_array;
@@ -27,6 +28,7 @@ use function is_string;
  * {@see SlackInstallationRevokedEvent} with its bindings; then every event is dispatched as
  * {@see SlackEventReceivedEvent}. Also the Messenger handler of {@see HandleSlackEvent}.
  */
+#[AsMessageHandler]
 final readonly class EventsHandler
 {
     /**

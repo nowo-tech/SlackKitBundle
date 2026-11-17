@@ -35,6 +35,16 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- `EventsHandler` carries `#[AsMessageHandler]` and is registered through autoconfiguration (only with `ingress.async: true`) instead of an explicit `messenger.message_handler` tag (REQ-MSG-001); the handler is registered exactly as before.
+- `twig/extra-bundle` and `twig/string-extra` are required: the bundle ships a Twig template (REQ-TWIG-004).
+
+### Demo
+
+- The demo shell is UiKit's admin layout with UiKit's default theme (REQ-DEMO-014): the Bootstrap 5 / Bootstrap Icons CDN shell, the token override and the bridge layout are gone; the instance settings pages render in the same shell.
+- The demo forms are FormKit forms (`App\Form\DemoActionType`, profile `demo`, REQ-DEMO-015); the demo requires `nowo-tech/ui-kit-bundle` `^2.53` and `nowo-tech/form-kit-bundle` `^2.23`; README WebP screenshots recaptured (REQ-DEMO-013). No bundle runtime change.
+
+### Changed
+
 - README: FrankenPHP Friendly Worker Mode banner (REQ-DOCS-017) and the measured PHP coverage (REQ-TEST-007)
 - Spec Kit: the 41 `src/` files added since the baseline review are mapped in `code-inventory.md` (REQ-SPECKIT-001 / REQ-SPECKIT-003)
 

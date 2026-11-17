@@ -128,7 +128,7 @@ final class ExtensionTest extends TestCase
 
         $service = $this->load(['credentials' => ['store' => 'app.slack_store'], 'ingress' => ['events_enabled' => true, 'async' => true], 'linking' => ['enabled' => true, 'identity_store' => 'app.ids', 'account_resolver' => 'app.accounts']]);
         self::assertSame('app.slack_store', (string) $service->getAlias(SlackInstallationStoreInterface::class));
-        self::assertTrue($service->getDefinition(EventsHandler::class)->hasTag('messenger.message_handler'));
+        self::assertTrue($service->getDefinition(EventsHandler::class)->isAutoconfigured());
         self::assertTrue($service->hasDefinition(AccountLinker::class));
         self::assertTrue($service->hasDefinition(AccountLinkController::class));
         self::assertTrue($service->hasDefinition('nowo_slack_kit.linking.confirmation_per_target'));
