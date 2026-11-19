@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.6.0] - 2026-11-19](#160---2026-11-19)
   - [Added](#added)
   - [Changed](#changed)
   - [Fixed](#fixed)
@@ -42,6 +43,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-19
+
 ### Added
 
 - `docs/CONCURRENCY.md` (REQ-RUNTIME-003): the write paths, every lock with its TTL and release, the lock store × cache pool matrix for one and several servers, the rule-6 answers, the host options and the residual risks.
@@ -63,6 +66,8 @@ All notable changes to this project are documented here. The format follows
 - A raw store exception from the `exists()` check that `Lock::release()` runs after `delete()` (a `PDOException` or `RedisException`, not wrapped by symfony/lock) no longer turns a saved link or a failed event's answer into a 500: every release failure is caught, logged by class only, and the answer is kept (audit UR-1).
 - An in-memory SQLite lock store (`sqlite::memory:`, `sqlite:///:memory:`, a `PdoStore` DSN or a DBAL connection with `memory: true` / path `:memory:`) is refused outside debug and test like the other process-local stores (audit UR-2).
 - The request-signature claim lasts `2 × max_skew_seconds + 1` seconds, so it also covers the last whole second of the accepted window (audit UR-3).
+
+[1.6.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.6.0
 
 ## [1.5.1] - 2026-11-17
 
@@ -524,5 +529,5 @@ Decided by the owner on 2026-11-05 so that Beacon's adoption is a no-op:
   (OAuth, 1.1). VarDumper and the profiler show `[redacted]` through `SlackSecret::__debugInfo()`; there is no
   separate caster.
 
-[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.5.1...HEAD
+[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.6.0...HEAD
 [1.0.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.0.0

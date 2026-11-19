@@ -6,6 +6,7 @@ are listed per target version.
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [To 1.6.0](#to-160)
 - [To 1.5.1](#to-151)
 - [To 1.5.0](#to-150)
 - [To 1.4.0](#to-140)
@@ -25,6 +26,14 @@ are listed per target version.
   - [Values already posted to Slack](#values-already-posted-to-slack)
 
 ## Unreleased
+
+## To 1.6.0
+
+From **1.5.1**:
+
+```bash
+composer update nowo-tech/slack-kit-bundle
+```
 
 From **1.5.1** (minor; REQ-RUNTIME-003, see [CONCURRENCY.md](CONCURRENCY.md)):
 
