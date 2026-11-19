@@ -6,6 +6,7 @@ namespace Nowo\SlackKitBundle\Ingress;
 
 use Doctrine\DBAL\Connection;
 use LogicException;
+use ReflectionException;
 use ReflectionProperty;
 use Symfony\Component\Lock\Exception\LockAcquiringException;
 use Symfony\Component\Lock\LockFactory;
@@ -20,6 +21,7 @@ use Symfony\Component\Lock\Store\RedisStore;
 
 use function hash;
 use function is_array;
+use function property_exists;
 use function str_contains;
 use function str_starts_with;
 
@@ -129,14 +131,33 @@ final readonly class ReplayGuard
     private static function isInMemoryDatabase(object $store): bool
     {
         if ($store instanceof PdoStore) {
-            $dsn = new ReflectionProperty(PdoStore::class, 'dsn');
-
-            return $dsn->isInitialized($store) && str_contains((string) $dsn->getValue($store), ':memory:');
+            return str_contains((string) self::readStoreProperty(PdoStore::class, 'dsn', $store), ':memory:');
         }
-        $connection = $store instanceof DoctrineDbalStore ? (new ReflectionProperty(DoctrineDbalStore::class, 'conn'))->getValue($store) : null;
+        $connection = $store instanceof DoctrineDbalStore ? self::readStoreProperty(DoctrineDbalStore::class, 'conn', $store) : null;
         $params     = $connection instanceof Connection ? $connection->getParams() : [];
 
         return ($params['memory'] ?? false) === true || ($params['path'] ?? null) === ':memory:' || str_contains((string) ($params['url'] ?? ''), ':memory:');
+    }
+
+    /**
+     * Reads a private property of a Symfony Lock store. Returns null ("cannot tell", so the store is trusted as
+     * configured; the build-time DSN check still refuses `:memory:` DSNs) when the property is missing, renamed or
+     * not initialised, so a Symfony refactor can never break a Slack request.
+     *
+     * @param class-string $class
+     */
+    private static function readStoreProperty(string $class, string $property, object $store): mixed
+    {
+        if (!property_exists($class, $property)) {
+            return null;
+        }
+        try {
+            $reflection = new ReflectionProperty($class, $property);
+
+            return $reflection->isInitialized($store) ? $reflection->getValue($store) : null;
+        } catch (ReflectionException) {
+            return null;
+        }
     }
 
     /**
