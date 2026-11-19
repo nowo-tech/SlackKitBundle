@@ -52,6 +52,7 @@ link:
         email_unavailable: "Slack deelt het e-mailadres van dit lid niet, dus de koppeling kan niet worden gecontroleerd. Vraag een beheerder."
         email_unconfirmed: "Volgens Slack is je Slack-e-mailadres niet bevestigd. Bevestig het in Slack en klik dan opnieuw op de knop."
         already_linked_in_workspace: "Je account is in deze workspace al gekoppeld aan een ander Slack-lid. Ontkoppel dat eerst."
+        busy: "Er loopt al een ander Slack-koppelverzoek voor dit account. Probeer het zo meteen opnieuw."
 slack:
     confirm:
         text: "Is dit je Slack-account? Klik op Bevestigen om het te koppelen."
@@ -77,6 +78,7 @@ install:
         cancelled: "De Slack-installatie is geannuleerd."
         invalid_state: "De Slack-installatielink is ongeldig of verlopen. Begin opnieuw."
         failed: "Slack heeft de installatie geweigerd: %error%."
+        unavailable: "De Slack-installatie is tijdelijk niet beschikbaar. Begin zo meteen opnieuw."
     refused:
         app_mismatch: "Slack gaf een installatie van een andere Slack-app terug. Installeer de app die voor deze site is ingesteld."
         enterprise_install: "Organisatiebrede Enterprise Grid-installaties worden niet ondersteund: installeer de app in één workspace. De app blijft in Slack geïnstalleerd tot je hem daar verwijdert."

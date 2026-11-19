@@ -26,6 +26,7 @@ use Nowo\SlackKitBundle\Linking\LinkResult;
 use Nowo\SlackKitBundle\Linking\SlackLink;
 use Nowo\SlackKitBundle\Linking\SlackVerifiedEmailCheck;
 use Nowo\SlackKitBundle\Security\SlackSecret;
+use Nowo\SlackKitBundle\Tests\Support\FailingLockStore;
 use Nowo\SlackKitBundle\Tests\Support\Fake;
 use Nowo\SlackKitBundle\Tests\Support\FakeDirectory;
 use Nowo\SlackKitBundle\Tests\Support\FakeIdentityLinks;
@@ -42,6 +43,9 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Translation\Loader\YamlFileLoader;
 use Symfony\Component\Translation\Translator;
 
+use function array_column;
+use function array_filter;
+use function array_values;
 use function dirname;
 use function explode;
 use function json_encode;
@@ -280,7 +284,69 @@ final class ClickLinkerTest extends TestCase
         self::assertSame('ana@example.test', (new SlackVerifiedEmailCheck('x', ' ANA@example.test '))->email);
     }
 
-    private function linker(int $limit = 50, ?string $manageRoute = 'app_integrations', ?Translator $translator = null, int $ttl = 600): ClickLinker
+    /**
+     * REQ-RUNTIME-003: a confirmation that loses a member or account lock answers Busy (nothing written, retry safe);
+     * the winner's release lets the retry through.
+     */
+    public function testALostLockAnswersBusyAndTheRetryLinks(): void
+    {
+        $locks = new LockFactory(new InMemoryStore());
+        $held  = $locks->createLock(ClickLinker::pairLockKey('default', SlackTeamId::fromString(Fake::TEAM), SlackUserId::fromString(Fake::USER)));
+        self::assertTrue($held->acquire());
+        $linker = $this->linker(locks: $locks);
+        $token  = $this->token();
+
+        self::assertSame(LinkResult::Busy, $linker->confirm('acc-a', $token));
+        self::assertSame([], $this->identities->all());
+        self::assertFalse(LinkResult::Busy->isSuccess());
+        self::assertSame('link.result.busy', LinkResult::Busy->translationKey());
+
+        $held->release();
+        self::assertSame(LinkResult::Linked, $linker->confirm('acc-a', $token), 'the token was not burned by the lost lock');
+    }
+
+    /**
+     * REQ-RUNTIME-003: the lock store is down (the member lock or the single-use claim): fail closed, never a 500,
+     * nothing written, the reason logged.
+     */
+    public function testAnUnreachableLockStoreFailsClosed(): void
+    {
+        foreach (['link_pair', 'link_click'] as $marker) {
+            $logger       = new RecordingLogger();
+            $this->logger = $logger;
+            $linker       = $this->linker(locks: new LockFactory(new FailingLockStore([$marker])));
+
+            self::assertSame(LinkResult::Unavailable, $linker->confirm('acc-a', $this->token()), $marker);
+            self::assertSame([], $this->identities->all(), $marker);
+            self::assertSame(['lock_store'], array_column(array_column($logger->records, 'context'), 'reason'), $marker);
+        }
+    }
+
+    /**
+     * REQ-RUNTIME-003: a release that fails keeps the answer (the lock expires after its TTL) and is logged.
+     */
+    public function testAFailedReleaseKeepsTheResult(): void
+    {
+        $linker = $this->linker(locks: new LockFactory(new FailingLockStore([], ['link_pair', 'link_account'])));
+
+        self::assertSame(LinkResult::Linked, $linker->confirm('acc-a', $this->token()));
+        self::assertContains('Slack link lock could not be released; it expires after its TTL.', $this->logger->messages());
+    }
+
+    /**
+     * Audit UR-1: Lock::release() calls the store's exists() unwrapped; a raw store exception after the link was saved
+     * keeps the Linked answer.
+     */
+    public function testARawStoreExceptionOnReleaseKeepsTheResult(): void
+    {
+        $linker = $this->linker(locks: new LockFactory(new FailingLockStore([], [], ['link_pair', 'link_account'])));
+
+        self::assertSame(LinkResult::Linked, $linker->confirm('acc-a', $this->token()));
+        self::assertNotNull($this->identities->findLinkBySlackUser(SlackTeamId::fromString(Fake::TEAM), SlackUserId::fromString(Fake::USER)));
+        self::assertSame(['PDOException', 'PDOException'], array_column(array_column(array_values(array_filter($this->logger->records, static fn (array $r): bool => $r['message'] === 'Slack link lock could not be released; it expires after its TTL.')), 'context'), 'exception'));
+    }
+
+    private function linker(int $limit = 50, ?string $manageRoute = 'app_integrations', ?Translator $translator = null, int $ttl = 600, ?LockFactory $locks = null): ClickLinker
     {
         $urls = $this->createStub(UrlGeneratorInterface::class);
         $urls->method('generate')->willReturnCallback(static fn (string $route, array $params = []): string => $route === 'app_integrations' ? 'https://example.test/integrations' : 'https://example.test/link/' . ($params['token'] ?? ''));
@@ -292,7 +358,7 @@ final class ClickLinkerTest extends TestCase
             $this->api,
             $this->directory,
             $this->signer,
-            new LockFactory(new InMemoryStore()),
+            $locks ?? new LockFactory(new InMemoryStore()),
             new RateLimiterFactory(['id' => 'click', 'policy' => 'fixed_window', 'limit' => $limit, 'interval' => '1 hour'], new InMemoryStorage()),
             $urls,
             $this->clock,

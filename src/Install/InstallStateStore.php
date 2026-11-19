@@ -11,6 +11,7 @@ use Nowo\SlackKitBundle\Security\SlackSecret;
 use Psr\Clock\ClockInterface;
 use SensitiveParameter;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
+use Symfony\Component\Lock\Exception\LockAcquiringException;
 use Symfony\Component\Lock\LockFactory;
 
 use function array_slice;
@@ -93,6 +94,9 @@ final readonly class InstallStateStore
     /**
      * Consumes a `state`: the app and owner scope of the pending install, or null when the state is malformed, forged,
      * unknown to this session, expired, issued to another account or already used.
+     *
+     * @throws LockAcquiringException when the lock store cannot be reached: the state is spent (it left the session)
+     *                                and nothing is installed (fail closed)
      *
      * @return array{app: string, scope: SlackOwnerScope}|null
      */

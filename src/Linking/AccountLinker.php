@@ -28,6 +28,7 @@ use Psr\Clock\ClockInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use Symfony\Component\Lock\Exception\LockAcquiringException;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\SharedLockInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
@@ -234,8 +235,15 @@ final readonly class AccountLinker implements AccountLinkerInterface
      */
     private function take(string $accountId, SlackTeamId $team, SlackUserId $user, bool $proven): LinkResult
     {
-        $lock = $this->locks?->createLock(ClickLinker::pairLockKey($this->installation->app, $team, $user), ClickLinker::DEFAULT_LOCK_TTL);
-        if ($lock instanceof SharedLockInterface && !$lock->acquire(false)) {
+        $lock = $this->locks?->createLock(ClickLinker::pairLockKey($this->installation->app, $team, $user), ClickLinker::DEFAULT_LOCK_TTL, false);
+        try {
+            if ($lock instanceof SharedLockInterface && !$lock->acquire(false)) {
+                return LinkResult::Busy; // Another claim or confirmation of this member is running (REQ-RUNTIME-003).
+            }
+        } catch (LockAcquiringException $e) {
+            // REQ-RUNTIME-003: the lock store is down; fail closed, nothing written.
+            $this->logger->error('Slack link claim refused.', ['account_id' => $accountId, 'reason' => 'lock_store', 'exception' => ($e->getPrevious() ?? $e)::class]);
+
             return LinkResult::Unavailable;
         }
         try {
@@ -243,7 +251,9 @@ final readonly class AccountLinker implements AccountLinkerInterface
         } catch (SlackIdentityConflictException) {
             return LinkResult::InUse; // Another account holds the pair (1.4 store contract).
         } finally {
-            $lock?->release();
+            if ($lock instanceof SharedLockInterface) {
+                ClickLinker::releaseQuietly($lock, $this->logger);
+            }
         }
     }
 

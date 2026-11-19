@@ -62,7 +62,7 @@ final class ReplayLockPass implements CompilerPassInterface
         }
         $guard->replaceArgument(2, $store);
         if ($production && $this->classify($container, $container->findDefinition((string) $store), 0) === false) {
-            throw new LogicException('NowoSlackKitBundle: the replay lock store is not an expiring shared store (Redis, Memcached, PDO, Doctrine DBAL, MongoDB, DynamoDB); local and session-scoped stores (flock, semaphore, in-memory, pgsql+advisory, zookeeper) are refused. Point nowo_slack_kit.ingress.replay_lock_factory at a dedicated framework.lock resource.');
+            throw new LogicException('NowoSlackKitBundle: the replay lock store is not an expiring shared store (Redis, Memcached, PDO, Doctrine DBAL, MongoDB, DynamoDB); local and session-scoped stores (flock, semaphore, in-memory, SQLite :memory:, pgsql+advisory, zookeeper) are refused. Point nowo_slack_kit.ingress.replay_lock_factory at a dedicated framework.lock resource.');
         }
     }
 

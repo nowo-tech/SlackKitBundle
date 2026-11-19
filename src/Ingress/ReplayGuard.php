@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Nowo\SlackKitBundle\Ingress;
 
+use Doctrine\DBAL\Connection;
 use LogicException;
 use ReflectionProperty;
+use Symfony\Component\Lock\Exception\LockAcquiringException;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\LockInterface;
 use Symfony\Component\Lock\PersistingStoreInterface;
@@ -74,16 +76,19 @@ final readonly class ReplayGuard
      * True the first time this signature is seen.
      *
      * @throws LogicException when the store is off the allowlist and a shared one is required
+     * @throws LockAcquiringException when the lock store cannot be reached (callers fail closed)
      */
     public function claimSignature(string $signature): bool
     {
-        return $this->claim('sig', $signature, 2 * $this->maxSkewSeconds) instanceof LockInterface;
+        // +1 (audit UR-3): the window check compares whole seconds, so the last accepted second is still covered.
+        return $this->claim('sig', $signature, 2 * $this->maxSkewSeconds + 1) instanceof LockInterface;
     }
 
     /**
      * The claim of this `event_id`, or null when it was already claimed. Release it when handling fails.
      *
      * @throws LogicException when the store is off the allowlist and a shared one is required
+     * @throws LockAcquiringException when the lock store cannot be reached (callers fail closed)
      */
     public function claimEvent(string $eventId): ?LockInterface
     {
@@ -110,7 +115,7 @@ final readonly class ReplayGuard
         }
         foreach (self::EXPIRING_STORES as $class) {
             if ($store instanceof $class) {
-                return true;
+                return !self::isInMemoryDatabase($store);
             }
         }
 
@@ -118,11 +123,29 @@ final readonly class ReplayGuard
     }
 
     /**
+     * Whether a PDO / Doctrine DBAL store points at an in-memory SQLite database (audit UR-2), as far as it can be
+     * told without a query: the PDO store's DSN, or the DBAL connection's parameters.
+     */
+    private static function isInMemoryDatabase(object $store): bool
+    {
+        if ($store instanceof PdoStore) {
+            $dsn = new ReflectionProperty(PdoStore::class, 'dsn');
+
+            return $dsn->isInitialized($store) && str_contains((string) $dsn->getValue($store), ':memory:');
+        }
+        $connection = $store instanceof DoctrineDbalStore ? (new ReflectionProperty(DoctrineDbalStore::class, 'conn'))->getValue($store) : null;
+        $params     = $connection instanceof Connection ? $connection->getParams() : [];
+
+        return ($params['memory'] ?? false) === true || ($params['path'] ?? null) === ':memory:' || str_contains((string) ($params['url'] ?? ''), ':memory:');
+    }
+
+    /**
      * Whether a lock DSN builds an allowed expiring shared store (`+advisory` and `zookeeper` DSNs never do).
      */
     public static function isSharedDsn(string $dsn): bool
     {
-        if (str_contains($dsn, '+advisory') || str_starts_with($dsn, 'zookeeper')) {
+        // Audit UR-2: an in-memory SQLite database lives in one process, so it is a local store whatever its driver.
+        if (str_contains($dsn, '+advisory') || str_starts_with($dsn, 'zookeeper') || str_contains($dsn, ':memory:')) {
             return false;
         }
         foreach (self::EXPIRING_DSN_PREFIXES as $prefix) {

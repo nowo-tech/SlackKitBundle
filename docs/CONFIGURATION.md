@@ -198,12 +198,15 @@ Routes (loaded by the `nowo_slack_kit` route loader):
   expiring shared stores builds (`ReplayGuard::EXPIRING_STORES`: Redis, Memcached, PDO, Doctrine DBAL, MongoDB, DynamoDB, or a `StoreFactory` connection
   service of Redis / RedisArray / RedisCluster / Relay / Predis / Memcached / PDO / DBAL `Connection` / MongoDB
   `Collection` / `DynamoDbClient`). `CombinedStore` members are checked one by one (all must pass; an empty one is
-  refused). Refused: local stores (`flock`, `semaphore`, `in-memory`, `null`), session-scoped ones whose locks ignore
+  refused). Refused: local stores (`flock`, `semaphore`, `in-memory`, `null`, in-memory SQLite such as `sqlite::memory:`), session-scoped ones whose locks ignore
   the TTL (`pgsql+advisory:`, `pgsql+advisory://`, `postgres(ql)+advisory://` advisory locks, `zookeeper://`
   ephemeral nodes) and any unknown DSN or store class. Plain `pgsql:` / `postgresql://` are fine. A store the build
   cannot see (an `%env()%` DSN, a factory-built service) is checked at runtime with `ReplayGuard::isSharedStore()` /
   `isSharedDsn()`; a refused one makes every ingress request fail (500). A custom factory whose store is not visible
   at all is trusted as configured. `ingress.replay_cache_pool` no longer exists.
+- When the lock store cannot be reached, replay protection fails closed: the ingress answers `503` + `Retry-After: 5`
+  without handling the request, the install callback and the link flows refuse with a flash. Several servers must
+  share **one** store; see [CONCURRENCY.md](CONCURRENCY.md).
 - Events API delivery is **at-least-once**: a failed delivery releases its `event_id`, so Slack's retry runs the
   handler again (partial side effects repeat), and a slow handler that fails after Slack's retry was already answered
   200 loses the event (Slack does not retry again). Keep event handlers idempotent and prefer `async: true`.

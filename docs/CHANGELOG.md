@@ -6,38 +6,63 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+  - [Added](#added)
+  - [Changed](#changed)
+  - [Fixed](#fixed)
 - [[1.5.1] - 2026-11-17](#151---2026-11-17)
   - [Tests](#tests)
   - [Documentation](#documentation)
 - [[1.5.0] - 2026-11-17](#150---2026-11-17)
-  - [Changed](#changed)
+  - [Changed](#changed-1)
   - [Demo](#demo)
 - [[1.4.0] - 2026-11-15](#140---2026-11-15)
   - [Added (spec 237, T000b: identities per workspace, link from a click)](#added-spec-237-t000b-identities-per-workspace-link-from-a-click)
-  - [Changed](#changed-1)
+  - [Changed](#changed-2)
   - [Security](#security)
 - [[1.3.0] - 2026-11-14](#130---2026-11-14)
   - [Added (spec 237, T000a: several workspaces)](#added-spec-237-t000a-several-workspaces)
   - [Added (spec 237, T000c: message updates)](#added-spec-237-t000c-message-updates)
-  - [Changed](#changed-2)
+  - [Changed](#changed-3)
   - [Security](#security-1)
 - [[1.2.1] - 2026-11-12](#121---2026-11-12)
-  - [Fixed](#fixed)
-  - [Changed](#changed-3)
+  - [Fixed](#fixed-1)
+  - [Changed](#changed-4)
 - [[1.2.0] - 2026-11-10](#120---2026-11-10)
-  - [Added](#added)
+  - [Added](#added-1)
   - [Documentation](#documentation-1)
 - [[1.1.0] - 2026-11-08](#110---2026-11-08)
-  - [Added](#added-1)
+  - [Added](#added-2)
 - [[1.0.1] - 2026-11-05](#101---2026-11-05)
   - [Documentation](#documentation-2)
 - [[1.0.0] - 2026-11-05](#100---2026-11-05)
-  - [Added](#added-2)
+  - [Added](#added-3)
   - [Security (REQ-SEC-004 audit, appendix FS)](#security-req-sec-004-audit-appendix-fs)
   - [Interim decisions (aligned with symfony-beacon 1.122.1)](#interim-decisions-aligned-with-symfony-beacon-11221)
   - [Notes / deviations from contract v1.1](#notes--deviations-from-contract-v11)
 
 ## [Unreleased]
+
+### Added
+
+- `docs/CONCURRENCY.md` (REQ-RUNTIME-003): the write paths, every lock with its TTL and release, the lock store × cache pool matrix for one and several servers, the rule-6 answers, the host options and the residual risks.
+- `LinkResult::Busy` (`link.result.busy`, 7 locales): a link request that loses the (workspace, member) or (account, workspace) lock to another request in flight. The account and link-from-click forms answer it with their usual `303` + flash, plus `X-Conflict-Code: CONFLICT_001` and `Retry-After: 1`; nothing was written and the link token is not burned, so a retry is safe.
+- Race tests with real OS processes (`symfony/process`): the request-signature replay check, the Events API `event_id` claim and the "Add to Slack" state claim let exactly one of four processes win on a shared `FlockStore` and on a shared expiring `PdoStore`; a store per server lets each server win once (documented multi-server risk).
+- CI: a "Demo lock" job checks that the demo's `composer.lock` satisfies the bundle's requirements.
+
+### Changed
+
+- A lost link lock answers `LinkResult::Busy` instead of `LinkResult::Unavailable` (`AccountLinker::claim()` / `findByEmail()`, `ClickLinker::confirm()`).
+- The link locks are created with `autoRelease: false` and released only in `finally`; a failed release is logged and the lock expires after its TTL, the answer is kept.
+
+### Fixed
+
+- An unreachable replay lock store no longer ends a Slack request with an uncaught `LockAcquiringException` (500): the interactions and events endpoints fail closed with `503` + `Retry-After: 5`, without handling the request.
+- An unreachable lock store no longer ends the "Add to Slack" callback with a 500: the state is spent, the code is never exchanged, nothing is installed, and the flash `install.flash.unavailable` asks to start again.
+- An unreachable lock store no longer ends a typed claim, an e-mail lookup or a link-from-click confirmation with a 500: they answer `LinkResult::Unavailable` with nothing written.
+- A failed release of the `event_id` claim after a failed handler no longer replaces the `500 Event handling failed` answer with an exception; it is logged.
+- A raw store exception from the `exists()` check that `Lock::release()` runs after `delete()` (a `PDOException` or `RedisException`, not wrapped by symfony/lock) no longer turns a saved link or a failed event's answer into a 500: every release failure is caught, logged by class only, and the answer is kept (audit UR-1).
+- An in-memory SQLite lock store (`sqlite::memory:`, `sqlite:///:memory:`, a `PdoStore` DSN or a DBAL connection with `memory: true` / path `:memory:`) is refused outside debug and test like the other process-local stores (audit UR-2).
+- The request-signature claim lasts `2 × max_skew_seconds + 1` seconds, so it also covers the last whole second of the accepted window (audit UR-3).
 
 ## [1.5.1] - 2026-11-17
 

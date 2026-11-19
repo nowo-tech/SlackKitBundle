@@ -21,6 +21,7 @@ use Psr\Log\NullLogger;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Lock\Exception\LockAcquiringException;
 use Symfony\Component\Lock\LockInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\TransportNamesStamp;
@@ -60,6 +61,9 @@ final readonly class IngressController
 
     /** Events route name with the `{app}` segment. */
     public const EVENTS_APP_ROUTE = 'nowo_slack_kit_events_app';
+
+    /** `Retry-After` (seconds) of the 503 answered while the replay lock store cannot be reached. */
+    public const REPLAY_STORE_RETRY_AFTER = 5;
 
     /**
      * @param SignatureVerifier $verifier signature checks
@@ -203,7 +207,11 @@ final readonly class IngressController
         if (!is_string($eventId) || preg_match('/^[A-Za-z0-9]{1,64}$/', $eventId) !== 1 || !is_array($event) || !is_string($event['type'] ?? null) || !is_int($envelope['event_time'] ?? null)) {
             return $this->text('Invalid event', Response::HTTP_BAD_REQUEST);
         }
-        $claim = $this->replay->claimEvent($eventId);
+        try {
+            $claim = $this->replay->claimEvent($eventId);
+        } catch (LockAcquiringException $e) {
+            return $this->replayStoreUnavailable($appName, $e);
+        }
         if (!$claim instanceof LockInterface) {
             return $this->text('', Response::HTTP_OK); // A Slack retry of a delivered event.
         }
@@ -216,7 +224,14 @@ final readonly class IngressController
             }
         } catch (Throwable $e) {
             // Audit FS-I5: forget the event so Slack's retry (same event_id) is handled.
-            $claim->release();
+            try {
+                $claim->release();
+            } catch (Throwable $released) {
+                // REQ-RUNTIME-003: the handler's failure is the answer; the claim expires after EVENT_TTL, so a Slack
+                // retry inside that hour is acknowledged as a duplicate. Throwable (audit UR-1): Lock::release() does
+                // not wrap the store's exists() check, so a raw store exception can come out too.
+                $this->logger->error('Slack event claim could not be released.', ['app' => $appName, 'reason' => 'replay_store', 'exception' => ($released->getPrevious() ?? $released)::class]);
+            }
             $this->logger->error('Slack event handling failed.', ['app' => $appName, 'reason' => 'handler', 'exception' => $e::class]);
 
             return $this->text('Event handling failed', Response::HTTP_INTERNAL_SERVER_ERROR);
@@ -289,7 +304,12 @@ final readonly class IngressController
         if ($label === null) {
             return $this->unauthorized($appName, 'signature');
         }
-        if (!$this->replay->claimSignature($signature)) {
+        try {
+            $claimed = $this->replay->claimSignature($signature);
+        } catch (LockAcquiringException $e) {
+            return $this->replayStoreUnavailable($appName, $e);
+        }
+        if (!$claimed) {
             return $this->unauthorized($appName, 'replay');
         }
 
@@ -345,6 +365,18 @@ final readonly class IngressController
         }
 
         return $key;
+    }
+
+    /**
+     * REQ-RUNTIME-003: the replay lock store cannot be reached. Replay protection fails closed (the request is not
+     * handled) with a retryable 503, never a 500 and never an unchecked accept. Not a lock conflict: no
+     * `X-Conflict-Code`.
+     */
+    private function replayStoreUnavailable(string $app, LockAcquiringException $e): Response
+    {
+        $this->logger->error('Slack request refused: replay store unavailable.', ['app' => $app, 'reason' => 'replay_store', 'exception' => ($e->getPrevious() ?? $e)::class]);
+
+        return new Response('Service Unavailable', Response::HTTP_SERVICE_UNAVAILABLE, ['Content-Type' => 'text/plain; charset=UTF-8', 'Retry-After' => (string) self::REPLAY_STORE_RETRY_AFTER]);
     }
 
     private function unauthorized(?string $app, string $reason): Response

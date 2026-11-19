@@ -124,7 +124,7 @@ final class ClickLinkRound2Test extends TestCase
         $box->linker = $this->linker($store);
 
         self::assertSame(LinkResult::Linked, $box->linker->confirm('acc-a', $this->token()));
-        self::assertSame(LinkResult::Unavailable, $box->result, 'the concurrent confirmation is refused while the first holds the lock');
+        self::assertSame(LinkResult::Busy, $box->result, 'the concurrent confirmation is refused while the first holds the lock');
         self::assertSame('acc-a', $this->holder()?->accountId);
         self::assertSame([], $this->events->of(SlackLinkReleasedEvent::class));
         self::assertCount(1, $this->events->of(SlackIdentityLinkedEvent::class), 'one link, one DM');
@@ -149,7 +149,7 @@ final class ClickLinkRound2Test extends TestCase
         $box->linker = $this->linker($store);
 
         self::assertSame(LinkResult::Linked, $box->linker->confirm('acc-a', $this->token()));
-        self::assertSame(LinkResult::Unavailable, $box->result);
+        self::assertSame(LinkResult::Busy, $box->result);
         self::assertCount(1, $this->inner->linksOf('acc-a'));
         self::assertSame(LinkResult::AlreadyLinkedInWorkspace, $this->linker($this->inner)->confirm('acc-a', $second));
     }
