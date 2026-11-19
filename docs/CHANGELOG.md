@@ -6,10 +6,12 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.6.1] - 2026-11-19](#161---2026-11-19)
+  - [Fixed](#fixed)
 - [[1.6.0] - 2026-11-19](#160---2026-11-19)
   - [Added](#added)
   - [Changed](#changed)
-  - [Fixed](#fixed)
+  - [Fixed](#fixed-1)
 - [[1.5.1] - 2026-11-17](#151---2026-11-17)
   - [Tests](#tests)
   - [Documentation](#documentation)
@@ -26,7 +28,7 @@ All notable changes to this project are documented here. The format follows
   - [Changed](#changed-3)
   - [Security](#security-1)
 - [[1.2.1] - 2026-11-12](#121---2026-11-12)
-  - [Fixed](#fixed-1)
+  - [Fixed](#fixed-2)
   - [Changed](#changed-4)
 - [[1.2.0] - 2026-11-10](#120---2026-11-10)
   - [Added](#added-1)
@@ -43,9 +45,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-11-19
+
 ### Fixed
 
 - `ReplayGuard`: the run-time in-memory SQLite check no longer breaks every Slack request if Symfony Lock renames or hides the private `PdoStore::$dsn` / `DoctrineDbalStore::$conn` properties; an unreadable property now means "cannot tell" and the store is trusted as configured (the build-time DSN check still refuses `:memory:` DSNs).
+
+[1.6.1]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.6.1
 
 ## [1.6.0] - 2026-11-19
 
@@ -533,5 +539,5 @@ Decided by the owner on 2026-11-05 so that Beacon's adoption is a no-op:
   (OAuth, 1.1). VarDumper and the profiler show `[redacted]` through `SlackSecret::__debugInfo()`; there is no
   separate caster.
 
-[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.6.1...HEAD
 [1.0.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.0.0
