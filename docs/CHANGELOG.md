@@ -43,6 +43,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `ReplayGuard`: the run-time in-memory SQLite check no longer breaks every Slack request if Symfony Lock renames or hides the private `PdoStore::$dsn` / `DoctrineDbalStore::$conn` properties; an unreadable property now means "cannot tell" and the store is trusted as configured (the build-time DSN check still refuses `:memory:` DSNs).
+
 ## [1.6.0] - 2026-11-19
 
 ### Added

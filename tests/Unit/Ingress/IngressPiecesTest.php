@@ -20,6 +20,9 @@ use Nowo\SlackKitBundle\Tests\Support\Fake;
 use Nowo\SlackKitBundle\Tests\Support\RecordingDispatcher;
 use PDO;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
+use ReflectionMethod;
+use stdClass;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\CombinedStore;
@@ -66,6 +69,19 @@ final class IngressPiecesTest extends TestCase
         self::assertNull($guard->claimEvent('Ev00000001'));
         $event->release();
         self::assertNotNull($guard->claimEvent('Ev00000001'), 'released after a failed handler (FS-I5)');
+    }
+
+    public function testUnreadableStorePropertyMeansCannotTellAndNeverThrows(): void
+    {
+        $read = new ReflectionMethod(ReplayGuard::class, 'readStoreProperty');
+        $pdo  = new PdoStore('sqlite::memory:');
+        self::assertSame('sqlite::memory:', $read->invoke(null, PdoStore::class, 'dsn', $pdo));
+        self::assertNull($read->invoke(null, PdoStore::class, 'renamed_by_symfony', $pdo), 'missing property');
+        self::assertNull($read->invoke(null, DoctrineDbalStore::class, 'renamed_by_symfony', new DoctrineDbalStore('sqlite:///:memory:')));
+        $uninitialised = (new ReflectionClass(PdoStore::class))->newInstanceWithoutConstructor();
+        self::assertNull($read->invoke(null, PdoStore::class, 'dsn', $uninitialised), 'uninitialised property');
+        self::assertNull($read->invoke(null, PdoStore::class, 'dsn', new stdClass()), 'foreign object: reflection error is swallowed');
+        self::assertTrue(ReplayGuard::isSharedStore($uninitialised), 'cannot tell: trusted as configured');
     }
 
     public function testReplayGuardRefusesStoresOffTheAllowlistWhenASharedOneIsRequired(): void
