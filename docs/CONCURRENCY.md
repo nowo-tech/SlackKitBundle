@@ -6,6 +6,7 @@
 - [Write paths](#write-paths)
 - [Locks](#locks)
 - [Lock store and cache pool](#lock-store-and-cache-pool)
+- [Rule 9: a Slack call under the click link locks (deliberate exception)](#rule-9-a-slack-call-under-the-click-link-locks-deliberate-exception)
 - [Codes and HTTP answers (rule 6)](#codes-and-http-answers-rule-6)
 - [Host options](#host-options)
 - [Worker mode](#worker-mode)
@@ -47,7 +48,7 @@ destructor.
 
 | Lock | TTL | Work done while held | Release |
 |------|-----|----------------------|---------|
-| `replay.sig` | 2 × `max_skew_seconds` (600 s by default): a signature is only accepted inside its ±`max_skew_seconds` window, so the claim outlives every moment it could be replayed | none | never (expires) |
+| `replay.sig` | 2 × `max_skew_seconds` + 1 s (601 s by default): a signature is only accepted inside its ±`max_skew_seconds` window (whole seconds, edges included), so the claim outlives every moment it could be replayed | none | never (expires) |
 | `replay.evt` | 3600 s (`ReplayGuard::EVENT_TTL`), longer than Slack's retry schedule | the sync handler, or the Messenger dispatch | only when handling fails |
 | `install_state` | `installations.oauth.state_ttl` (at most 600 s), at least the state's remaining lifetime | none | never (expires) |
 | `link_click` | the token's remaining lifetime (`linking.from_click.ttl`) | none | never (expires) |
@@ -59,7 +60,9 @@ bundle catches them on its own paths only:
 
 - acquiring fails → fail closed (503 on the ingress, a flash on the HTML routes), logged with `reason: replay_store`,
   `state_store` or `lock_store` and the store exception's class (no key, no value);
-- releasing fails → the answer is kept, a warning or error is logged, the lock expires after its TTL.
+- releasing fails → the answer is kept, a warning or error is logged, the lock expires after its TTL. `Lock::release()`
+  wraps the store's `delete()` but not the `exists()` check after it, so the bundle catches any `Throwable` there (a raw
+  `PDOException` or `RedisException` included) and logs only its class.
 
 ## Lock store and cache pool
 
@@ -71,6 +74,7 @@ A claim is single-use only among processes that share the **same lock store**.
 | One server, debug or test only | `flock` / `semaphore` / in-memory | **Not single-use**: a `flock` or `semaphore` claim ends with its lock object, which the bundle drops right after the claim, so a later copy can pass. Refused outside debug and test |
 | Several servers | Shared expiring store (one Redis, one database) | Atomic and single-use across servers |
 | Several servers | A store local to each server (a SQLite file per server, a local Redis per server) | **Not single-use**: each server accepts the same signature, event or state once |
+| Any | In-memory SQLite (`sqlite::memory:`, `sqlite:///:memory:`, a DBAL connection with `memory: true`) | **Not single-use**: the database lives in one process. Refused outside debug and test, by DSN and, at run time, for a `PdoStore` DSN or a DBAL connection's parameters; a `PDO` object handed to `PdoStore` cannot be inspected without a query and is trusted as configured |
 
 Outside debug and test, `ReplayLockPass` fails the container build unless the factory's store is on the allowlist of
 expiring shared stores (see [CONFIGURATION.md](CONFIGURATION.md#ingress)), and `ReplayGuard` checks it again at run
@@ -99,6 +103,15 @@ nowo_slack_kit:
     linking:
         rate_limiter_cache_pool: cache.slack_kit_limits
 ```
+
+### Rule 9: a Slack call under the click link locks (deliberate exception)
+
+The click link locks (`link_pair`, `link_account`) are held across one Slack `users.info` call, so that the profile
+check, the e-mail match and the write see the same state. This is a deliberate exception to rule 9 ("no HTTP while
+holding a lock"): these are lock-store keys with a TTL, not database row or advisory locks, so they block no database
+connection and no other key; the call is bounded by `api.max_duration`, and the lock TTL is `api.max_duration` + 10 s.
+A concurrent request for the same member or account gets `Busy` at once (non-blocking), never waits. The confirmation
+DM is sent after the locks are released.
 
 ## Codes and HTTP answers (rule 6)
 

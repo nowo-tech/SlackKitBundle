@@ -198,7 +198,7 @@ Routes (loaded by the `nowo_slack_kit` route loader):
   expiring shared stores builds (`ReplayGuard::EXPIRING_STORES`: Redis, Memcached, PDO, Doctrine DBAL, MongoDB, DynamoDB, or a `StoreFactory` connection
   service of Redis / RedisArray / RedisCluster / Relay / Predis / Memcached / PDO / DBAL `Connection` / MongoDB
   `Collection` / `DynamoDbClient`). `CombinedStore` members are checked one by one (all must pass; an empty one is
-  refused). Refused: local stores (`flock`, `semaphore`, `in-memory`, `null`), session-scoped ones whose locks ignore
+  refused). Refused: local stores (`flock`, `semaphore`, `in-memory`, `null`, in-memory SQLite such as `sqlite::memory:`), session-scoped ones whose locks ignore
   the TTL (`pgsql+advisory:`, `pgsql+advisory://`, `postgres(ql)+advisory://` advisory locks, `zookeeper://`
   ephemeral nodes) and any unknown DSN or store class. Plain `pgsql:` / `postgresql://` are fine. A store the build
   cannot see (an `%env()%` DSN, a factory-built service) is checked at runtime with `ReplayGuard::isSharedStore()` /

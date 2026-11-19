@@ -44,6 +44,8 @@ use Symfony\Component\Translation\Loader\YamlFileLoader;
 use Symfony\Component\Translation\Translator;
 
 use function array_column;
+use function array_filter;
+use function array_values;
 use function dirname;
 use function explode;
 use function json_encode;
@@ -329,6 +331,19 @@ final class ClickLinkerTest extends TestCase
 
         self::assertSame(LinkResult::Linked, $linker->confirm('acc-a', $this->token()));
         self::assertContains('Slack link lock could not be released; it expires after its TTL.', $this->logger->messages());
+    }
+
+    /**
+     * Audit UR-1: Lock::release() calls the store's exists() unwrapped; a raw store exception after the link was saved
+     * keeps the Linked answer.
+     */
+    public function testARawStoreExceptionOnReleaseKeepsTheResult(): void
+    {
+        $linker = $this->linker(locks: new LockFactory(new FailingLockStore([], [], ['link_pair', 'link_account'])));
+
+        self::assertSame(LinkResult::Linked, $linker->confirm('acc-a', $this->token()));
+        self::assertNotNull($this->identities->findLinkBySlackUser(SlackTeamId::fromString(Fake::TEAM), SlackUserId::fromString(Fake::USER)));
+        self::assertSame(['PDOException', 'PDOException'], array_column(array_column(array_values(array_filter($this->logger->records, static fn (array $r): bool => $r['message'] === 'Slack link lock could not be released; it expires after its TTL.')), 'context'), 'exception'));
     }
 
     private function linker(int $limit = 50, ?string $manageRoute = 'app_integrations', ?Translator $translator = null, int $ttl = 600, ?LockFactory $locks = null): ClickLinker

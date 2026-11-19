@@ -22,7 +22,6 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Lock\Exception\LockAcquiringException;
-use Symfony\Component\Lock\Exception\LockReleasingException;
 use Symfony\Component\Lock\LockInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\TransportNamesStamp;
@@ -227,10 +226,11 @@ final readonly class IngressController
             // Audit FS-I5: forget the event so Slack's retry (same event_id) is handled.
             try {
                 $claim->release();
-            } catch (LockReleasingException $released) {
+            } catch (Throwable $released) {
                 // REQ-RUNTIME-003: the handler's failure is the answer; the claim expires after EVENT_TTL, so a Slack
-                // retry inside that hour is acknowledged as a duplicate.
-                $this->logger->error('Slack event claim could not be released.', ['app' => $appName, 'reason' => 'replay_store', 'exception' => $released::class]);
+                // retry inside that hour is acknowledged as a duplicate. Throwable (audit UR-1): Lock::release() does
+                // not wrap the store's exists() check, so a raw store exception can come out too.
+                $this->logger->error('Slack event claim could not be released.', ['app' => $appName, 'reason' => 'replay_store', 'exception' => ($released->getPrevious() ?? $released)::class]);
             }
             $this->logger->error('Slack event handling failed.', ['app' => $appName, 'reason' => 'handler', 'exception' => $e::class]);
 

@@ -60,6 +60,9 @@ All notable changes to this project are documented here. The format follows
 - An unreachable lock store no longer ends the "Add to Slack" callback with a 500: the state is spent, the code is never exchanged, nothing is installed, and the flash `install.flash.unavailable` asks to start again.
 - An unreachable lock store no longer ends a typed claim, an e-mail lookup or a link-from-click confirmation with a 500: they answer `LinkResult::Unavailable` with nothing written.
 - A failed release of the `event_id` claim after a failed handler no longer replaces the `500 Event handling failed` answer with an exception; it is logged.
+- A raw store exception from the `exists()` check that `Lock::release()` runs after `delete()` (a `PDOException` or `RedisException`, not wrapped by symfony/lock) no longer turns a saved link or a failed event's answer into a 500: every release failure is caught, logged by class only, and the answer is kept (audit UR-1).
+- An in-memory SQLite lock store (`sqlite::memory:`, `sqlite:///:memory:`, a `PdoStore` DSN or a DBAL connection with `memory: true` / path `:memory:`) is refused outside debug and test like the other process-local stores (audit UR-2).
+- The request-signature claim lasts `2 × max_skew_seconds + 1` seconds, so it also covers the last whole second of the accepted window (audit UR-3).
 
 ## [1.5.1] - 2026-11-17
 

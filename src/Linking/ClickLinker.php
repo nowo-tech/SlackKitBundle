@@ -28,12 +28,12 @@ use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Component\Lock\Exception\LockAcquiringException;
-use Symfony\Component\Lock\Exception\LockReleasingException;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\LockInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
+use Throwable;
 
 use function hash;
 use function intdiv;
@@ -202,7 +202,9 @@ final readonly class ClickLinker implements ClickLinkerInterface
     {
         try {
             $lock->release();
-        } catch (LockReleasingException $e) {
+        } catch (Throwable $e) {
+            // Audit UR-1: Lock::release() wraps delete() but not the exists() check after it, so a raw store exception
+            // (PDOException, RedisException) can come out too; the link is saved, so the answer is kept.
             $logger->warning('Slack link lock could not be released; it expires after its TTL.', ['exception' => ($e->getPrevious() ?? $e)::class]);
         }
     }

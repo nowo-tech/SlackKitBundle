@@ -382,13 +382,23 @@ final class IngressControllerTest extends TestCase
      */
     public function testAFailedReleaseOfAFailedEventIsLogged(): void
     {
+        foreach ([new FailingLockStore([], ['replay.evt']), new FailingLockStore([], [], ['replay.evt'])] as $store) {
+            $this->assertAFailedReleaseIsLogged($store);
+        }
+    }
+
+    /**
+     * The second store throws a raw PDOException from exists() (audit UR-1).
+     */
+    private function assertAFailedReleaseIsLogged(FailingLockStore $store): void
+    {
         $bus = new class implements MessageBusInterface {
             public function dispatch(object $message, array $stamps = []): Envelope
             {
                 throw new RuntimeException('transport down');
             }
         };
-        $ingress = new Ingress(bus: $bus, locks: new LockFactory(new FailingLockStore([], ['replay.evt'])));
+        $ingress = new Ingress(bus: $bus, locks: new LockFactory($store));
         $event   = (string) json_encode(['type' => 'event_callback', 'team_id' => Fake::TEAM, 'api_app_id' => Fake::APP_ID, 'event_id' => 'Ev00000010', 'event_time' => Fake::NOW, 'event' => ['type' => 'app_mention']]);
 
         self::assertSame(500, $ingress->controller->events($this->raw($event, Fake::signed($event), 'application/json'))->getStatusCode());
