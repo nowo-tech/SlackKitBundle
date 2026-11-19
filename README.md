@@ -259,6 +259,7 @@ make release-check
 - [PSR evaluation (REQ-CS-007)](docs/PSR.md)
 - [Demo (FrankenPHP)](docs/DEMO-FRANKENPHP.md)
 - [FrankenPHP worker audit (kernel not reset)](docs/FRANKENPHP-WORKER-AUDIT.md)
+- [Concurrency (locks, replay claims, multi-server)](docs/CONCURRENCY.md)
 - [GitHub Actions CI requirements](docs/GITHUB_CI.md)
 
 ## Tests and coverage

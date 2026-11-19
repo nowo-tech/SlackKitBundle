@@ -150,7 +150,7 @@ final readonly class ClickLinkController
 
     private function answer(Request $request, LinkResult $result): RedirectResponse
     {
-        return $this->back($request, $this->returnUrl(), $result->isSuccess() ? 'success' : 'error', $result->translationKey(), [], $this->translator);
+        return $this->conflictMarked($this->back($request, $this->returnUrl(), $result->isSuccess() ? 'success' : 'error', $result->translationKey(), [], $this->translator), $result);
     }
 
     private function returnUrl(): string

@@ -19,11 +19,13 @@ use Nowo\SlackKitBundle\Ingress\SigningSecretResolverInterface;
 use Nowo\SlackKitBundle\Ingress\UnverifiedPayloadPeek;
 use Nowo\SlackKitBundle\Linking\SlackLink;
 use Nowo\SlackKitBundle\Security\SlackSecret;
+use Nowo\SlackKitBundle\Tests\Support\FailingLockStore;
 use Nowo\SlackKitBundle\Tests\Support\Fake;
 use Nowo\SlackKitBundle\Tests\Support\Ingress;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\TransportNamesStamp;
@@ -349,6 +351,49 @@ final class IngressControllerTest extends TestCase
         // Slack's retry: same event_id, new timestamp and signature.
         self::assertSame(200, $ingress->controller->events($this->raw($event, Fake::signed($event, Fake::NOW + 5), 'application/json'))->getStatusCode());
         self::assertSame(2, $bus->calls);
+    }
+
+    /**
+     * REQ-RUNTIME-003: the replay lock store cannot be reached. Replay protection fails closed: a retryable 503 (never
+     * a 500, never an unchecked accept), nothing handled, no conflict code.
+     */
+    public function testAnUnreachableReplayStoreFailsClosed(): void
+    {
+        $ingress = new Ingress(locks: new LockFactory(new FailingLockStore(['replay.sig'])));
+        $this->link($ingress);
+        $body     = Fake::form(Fake::blockActions('beacon.issue.resolve', $ingress->codec->sign('beacon.issue.resolve', [])));
+        $response = $ingress->controller->interactions($this->raw($body, Fake::signed($body)));
+
+        self::assertSame(503, $response->getStatusCode());
+        self::assertSame('5', $response->headers->get('Retry-After'));
+        self::assertFalse($response->headers->has('X-Conflict-Code'));
+        self::assertSame([], $ingress->handler->seen);
+        self::assertSame('replay_store', $ingress->logger->records[0]['context']['reason'] ?? null);
+
+        $ingress = new Ingress(locks: new LockFactory(new FailingLockStore(['replay.evt'])));
+        $event   = (string) json_encode(['type' => 'event_callback', 'team_id' => Fake::TEAM, 'api_app_id' => Fake::APP_ID, 'event_id' => 'Ev00000009', 'event_time' => Fake::NOW, 'event' => ['type' => 'app_mention']]);
+        $answer  = $ingress->controller->events($this->raw($event, Fake::signed($event), 'application/json'));
+        self::assertSame(503, $answer->getStatusCode());
+        self::assertSame([], $ingress->events->of(SlackEventReceivedEvent::class));
+    }
+
+    /**
+     * REQ-RUNTIME-003: a failed handler whose claim cannot be released still answers 500, and the failure is logged.
+     */
+    public function testAFailedReleaseOfAFailedEventIsLogged(): void
+    {
+        $bus = new class implements MessageBusInterface {
+            public function dispatch(object $message, array $stamps = []): Envelope
+            {
+                throw new RuntimeException('transport down');
+            }
+        };
+        $ingress = new Ingress(bus: $bus, locks: new LockFactory(new FailingLockStore([], ['replay.evt'])));
+        $event   = (string) json_encode(['type' => 'event_callback', 'team_id' => Fake::TEAM, 'api_app_id' => Fake::APP_ID, 'event_id' => 'Ev00000010', 'event_time' => Fake::NOW, 'event' => ['type' => 'app_mention']]);
+
+        self::assertSame(500, $ingress->controller->events($this->raw($event, Fake::signed($event), 'application/json'))->getStatusCode());
+        self::assertContains('Slack event claim could not be released.', $ingress->logger->messages());
+        self::assertContains('Slack event handling failed.', $ingress->logger->messages());
     }
 
     /**

@@ -28,6 +28,7 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\Lock\Exception\LockAcquiringException;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
@@ -151,7 +152,14 @@ final readonly class InstallController
         $account = $this->account();
         $back    = $this->returnUrl();
         $state   = $request->query->get('state');
-        $pending = is_string($state) && $request->hasSession() ? $this->states->consume($request->getSession(), $state, $account) : null;
+        try {
+            $pending = is_string($state) && $request->hasSession() ? $this->states->consume($request->getSession(), $state, $account) : null;
+        } catch (LockAcquiringException $e) {
+            // REQ-RUNTIME-003: the single-use claim cannot be checked, so nothing is installed (fail closed).
+            $this->logger->error('Slack install refused.', ['reason' => 'state_store', 'exception' => ($e->getPrevious() ?? $e)::class]);
+
+            return $this->back($request, $back, 'error', 'install.flash.unavailable', [], $this->translator);
+        }
         if ($pending === null) {
             $this->logger->warning('Slack install refused.', ['reason' => 'state']);
 

@@ -58,6 +58,7 @@ final class Ingress
         bool $resolverActors = false,
         bool $ownAppActors = false,
         ?SlackActorFilterInterface $actorFilter = null,
+        ?LockFactory $locks = null,
     ) {
         $this->clock            = new MockClock('@' . Fake::NOW);
         $this->store            = Fake::store($withTeam);
@@ -83,7 +84,7 @@ final class Ingress
         );
         $this->controller = new IngressController(
             new SignatureVerifier($this->clock),
-            new ReplayGuard(new LockFactory(new InMemoryStore())),
+            new ReplayGuard($locks ?? new LockFactory(new InMemoryStore())),
             new SlackAppRegistry('default', $apps, $this->store),
             $this->store,
             $this->router,

@@ -52,6 +52,7 @@ link:
         email_unavailable: "Slack does not share this member's e-mail, so the link cannot be checked. Ask an administrator."
         email_unconfirmed: "Slack reports that your Slack e-mail is not confirmed. Confirm it in Slack, then click the button again."
         already_linked_in_workspace: "Your account is already linked to another Slack member in this workspace. Unlink it first."
+        busy: "Another Slack link request for this account is in progress. Try again in a moment."
 slack:
     confirm:
         text: "Is this your Slack account? Click Confirm to link it."
@@ -77,6 +78,7 @@ install:
         cancelled: "The Slack install was cancelled."
         invalid_state: "The Slack install link is invalid or expired. Start again."
         failed: "Slack refused the install: %error%."
+        unavailable: "Slack install is temporarily unavailable. Start again in a moment."
     refused:
         app_mismatch: "Slack returned an installation of another Slack app. Install the app configured for this site."
         enterprise_install: "Org-wide Enterprise Grid installs are not supported: install the app into one workspace. The app stays installed in Slack until you remove it there."

@@ -6,6 +6,7 @@ namespace Nowo\SlackKitBundle\Ingress;
 
 use LogicException;
 use ReflectionProperty;
+use Symfony\Component\Lock\Exception\LockAcquiringException;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\LockInterface;
 use Symfony\Component\Lock\PersistingStoreInterface;
@@ -74,6 +75,7 @@ final readonly class ReplayGuard
      * True the first time this signature is seen.
      *
      * @throws LogicException when the store is off the allowlist and a shared one is required
+     * @throws LockAcquiringException when the lock store cannot be reached (callers fail closed)
      */
     public function claimSignature(string $signature): bool
     {
@@ -84,6 +86,7 @@ final readonly class ReplayGuard
      * The claim of this `event_id`, or null when it was already claimed. Release it when handling fails.
      *
      * @throws LogicException when the store is off the allowlist and a shared one is required
+     * @throws LockAcquiringException when the lock store cannot be reached (callers fail closed)
      */
     public function claimEvent(string $eventId): ?LockInterface
     {

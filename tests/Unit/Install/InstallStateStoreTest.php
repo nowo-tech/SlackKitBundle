@@ -6,11 +6,13 @@ namespace Nowo\SlackKitBundle\Tests\Unit\Install;
 
 use Nowo\SlackKitBundle\Credentials\SlackOwnerScope;
 use Nowo\SlackKitBundle\Install\InstallStateStore;
+use Nowo\SlackKitBundle\Tests\Support\FailingLockStore;
 use Nowo\SlackKitBundle\Tests\Support\Fake;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
+use Symfony\Component\Lock\Exception\LockAcquiringException;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
@@ -63,6 +65,23 @@ final class InstallStateStoreTest extends TestCase
         $other = new InstallStateStore(InstallStateStore::deriveKey('another-kernel-secret-not-real'), new LockFactory(new InMemoryStore()), $this->clock);
         self::assertNull($other->consume($session, $state, 'admin'), 'a state signed by another key');
         self::assertNotNull($this->states->consume($session, $state, 'admin'));
+    }
+
+    /**
+     * REQ-RUNTIME-003: the lock store is down: consume() throws (the caller fails closed) and the state is spent.
+     */
+    public function testAnUnreachableLockStoreThrowsAndSpendsTheState(): void
+    {
+        $states  = new InstallStateStore(InstallStateStore::deriveKey(Fake::KERNEL_SECRET), new LockFactory(new FailingLockStore()), $this->clock);
+        $session = $this->session();
+        $state   = $states->issue($session, 'default', new SlackOwnerScope('organization', 'org-1'), 'admin');
+
+        try {
+            $states->consume($session, $state, 'admin');
+            self::fail('LockAcquiringException expected');
+        } catch (LockAcquiringException) {
+        }
+        self::assertSame([], $session->get(InstallStateStore::SESSION_KEY));
     }
 
     public function testASecondProcessCannotReuseAState(): void

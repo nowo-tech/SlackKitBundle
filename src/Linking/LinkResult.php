@@ -42,6 +42,12 @@ enum LinkResult: string
     case AlreadyLinkedInWorkspace = 'already_linked_in_workspace';
 
     /**
+     * 1.6 (REQ-RUNTIME-003): another link request for the same member or account holds its lock; nothing was written,
+     * so trying again is safe (`CONFLICT_001`).
+     */
+    case Busy = 'busy';
+
+    /**
      * Translation key of the flash message (domain `NowoSlackKitBundle`).
      */
     public function translationKey(): string

@@ -27,7 +27,10 @@ use Psr\Clock\ClockInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use Symfony\Component\Lock\Exception\LockAcquiringException;
+use Symfony\Component\Lock\Exception\LockReleasingException;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\LockInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
@@ -160,20 +163,24 @@ final readonly class ClickLinker implements ClickLinkerInterface
         }
         $keys = [self::pairLockKey($verified->installation->app, $verified->team, $verified->user), 'nowo_slack_kit.link_account.' . hash('sha256', $verified->installation->app . '|' . $accountId . '|' . $verified->team->value)];
         sort($keys);
-        $held   = [];
-        $result = LinkResult::Unavailable;
+        $held = [];
         try {
             foreach ($keys as $key) {
-                $lock = $this->locks->createLock($key, $this->lockTtl);
+                $lock = $this->locks->createLock($key, $this->lockTtl, false); // Released below, never by a destructor.
                 if (!$lock->acquire(false)) {
-                    return LinkResult::Unavailable; // Another confirmation for this member or account is running.
+                    return LinkResult::Busy; // Another confirmation for this member or account is running.
                 }
                 $held[] = $lock;
             }
             $result = $this->link($accountId, $verified);
+        } catch (LockAcquiringException $e) {
+            // REQ-RUNTIME-003: the lock store is down; nothing was written (the single-use claim comes before the write).
+            $this->logger->error('Slack link from a click refused.', ['team' => $verified->team->value, 'reason' => 'lock_store', 'exception' => ($e->getPrevious() ?? $e)::class]);
+
+            return LinkResult::Unavailable;
         } finally {
             foreach ($held as $lock) {
-                $lock->release();
+                self::releaseQuietly($lock, $this->logger);
             }
         }
         if ($result instanceof SlackInstallation) {
@@ -184,6 +191,20 @@ final readonly class ClickLinker implements ClickLinkerInterface
         }
 
         return $result;
+    }
+
+    /**
+     * Releases a link lock; a failed release is logged and the lock expires after its TTL (the answer is unchanged).
+     *
+     * @internal shared with {@see AccountLinker}
+     */
+    public static function releaseQuietly(LockInterface $lock, LoggerInterface $logger): void
+    {
+        try {
+            $lock->release();
+        } catch (LockReleasingException $e) {
+            $logger->warning('Slack link lock could not be released; it expires after its TTL.', ['exception' => ($e->getPrevious() ?? $e)::class]);
+        }
     }
 
     /**

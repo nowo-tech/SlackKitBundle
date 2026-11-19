@@ -52,6 +52,7 @@ link:
         email_unavailable: "Slack ne partage pas l'e-mail de ce membre : le lien ne peut pas être vérifié. Contactez un administrateur."
         email_unconfirmed: "Slack indique que votre e-mail Slack n'est pas confirmé. Confirmez-le dans Slack, puis cliquez à nouveau sur le bouton."
         already_linked_in_workspace: "Votre compte est déjà lié à un autre membre Slack dans cet espace de travail. Supprimez d'abord ce lien."
+        busy: "Une autre demande de liaison Slack est en cours pour ce compte. Réessayez dans un instant."
 slack:
     confirm:
         text: "Est-ce votre compte Slack ? Cliquez sur Confirmer pour le lier."
@@ -77,6 +78,7 @@ install:
         cancelled: "L'installation de Slack a été annulée."
         invalid_state: "Le lien d'installation de Slack est invalide ou a expiré. Recommencez."
         failed: "Slack a refusé l'installation : %error%."
+        unavailable: "L'installation de Slack est temporairement indisponible. Recommencez dans un instant."
     refused:
         app_mismatch: "Slack a renvoyé une installation d'une autre app Slack. Installez l'app configurée pour ce site."
         enterprise_install: "Les installations Enterprise Grid à l'échelle de l'organisation ne sont pas prises en charge : installez l'app dans un seul espace de travail. L'app reste installée dans Slack jusqu'à ce que vous la supprimiez là-bas."

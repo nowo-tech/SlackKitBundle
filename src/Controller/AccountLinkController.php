@@ -135,6 +135,6 @@ final readonly class AccountLinkController
     {
         $url = $this->returnRoute !== null ? $this->urls->generate($this->returnRoute) : '/';
 
-        return $this->back($request, $url, $result->isSuccess() ? 'success' : 'error', $result->translationKey(), [], $this->translator);
+        return $this->conflictMarked($this->back($request, $url, $result->isSuccess() ? 'success' : 'error', $result->translationKey(), [], $this->translator), $result);
     }
 }

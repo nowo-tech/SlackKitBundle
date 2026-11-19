@@ -26,6 +26,26 @@ are listed per target version.
 
 ## Unreleased
 
+From **1.5.1** (minor; REQ-RUNTIME-003, see [CONCURRENCY.md](CONCURRENCY.md)):
+
+```bash
+composer update nowo-tech/slack-kit-bundle
+```
+
+- **New `LinkResult::Busy` case.** A typed claim, an e-mail lookup or a link-from-click confirmation that loses the
+  member or account lock to another request in flight now returns `LinkResult::Busy` (it returned
+  `LinkResult::Unavailable`). A host that calls `AccountLinkerInterface` / `ClickLinkerInterface` and uses an
+  exhaustive `match` on `LinkResult` must add the case (nothing was written; retrying is safe). A host that overrides
+  the bundle's translations adds `link.result.busy` and `install.flash.unavailable`.
+- **Lock-conflict marker on the link forms.** The bundle's account and link-from-click forms answer a lost lock with
+  their usual `303` + flash and the headers `X-Conflict-Code: CONFLICT_001` and `Retry-After: 1`. Nothing to change.
+- **Lock store outages fail closed without a 500.** With `ingress.replay_lock_factory` unreachable, the Slack
+  endpoints answer `503` + `Retry-After: 5` (they ended with an uncaught `LockAcquiringException`, a 500), the
+  "Add to Slack" callback shows `install.flash.unavailable`, and the link flows answer `LinkResult::Unavailable`. Monitor
+  the error lines with `reason: replay_store`, `state_store` or `lock_store`.
+- **Several servers** need one expiring lock store shared by every server (one Redis or one database), not only an
+  allowlisted store class; see [CONCURRENCY.md](CONCURRENCY.md#lock-store-and-cache-pool).
+
 ## To 1.5.1
 
 From **1.5.0**:

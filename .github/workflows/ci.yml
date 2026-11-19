@@ -21,6 +21,19 @@ jobs:
           chmod +x .scripts/check-no-cursor-coauthor.sh
           ./.scripts/check-no-cursor-coauthor.sh HEAD
 
+  # The demo installs the bundle from a path repository with `composer install`, i.e. from its lock: a requirement
+  # added or raised later is not installed and the demo fails with "class not found". The bundle has no
+  # nowo-tech/transaction-* dependency, so only the demo lock is checked (no dependency-floor job).
+  demo-lock:
+    name: Demo lock
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Demo lock satisfies the bundle's requirements
+        run: python3 .scripts/check-demo-lock.py .
+
   # REQ-SF-002: matrix must include mandatory Symfony minors 7.4, 8.1.
   test:
     name: PHP ${{ matrix.php }} - Symfony ${{ matrix.symfony }}

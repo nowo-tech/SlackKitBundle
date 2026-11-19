@@ -18,10 +18,12 @@ use Nowo\SlackKitBundle\Linking\ClickLinker;
 use Nowo\SlackKitBundle\Linking\LinkResult;
 use Nowo\SlackKitBundle\Linking\SlackIdentityLinksInterface;
 use Nowo\SlackKitBundle\Linking\SlackLink;
+use Nowo\SlackKitBundle\Tests\Support\FailingLockStore;
 use Nowo\SlackKitBundle\Tests\Support\Fake;
 use Nowo\SlackKitBundle\Tests\Support\FakeIdentityLinks;
 use Nowo\SlackKitBundle\Tests\Support\RecordingApi;
 use Nowo\SlackKitBundle\Tests\Support\RecordingDispatcher;
+use Nowo\SlackKitBundle\Tests\Support\RecordingLogger;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Lock\LockFactory;
@@ -76,9 +78,35 @@ final class AccountLinkerConflictTest extends TestCase
         $lock = $this->locks->createLock(ClickLinker::pairLockKey(SlackInstallationKey::DEFAULT_APP, SlackTeamId::fromString(Fake::TEAM), SlackUserId::fromString(Fake::USER)));
         self::assertTrue($lock->acquire());
 
-        self::assertSame(LinkResult::Unavailable, $this->linker($this->ids)->claim('acc-typed', Fake::USER), 'a link-from-click of that member is running');
+        self::assertSame(LinkResult::Busy, $this->linker($this->ids)->claim('acc-typed', Fake::USER), 'a link-from-click of that member is running');
         $lock->release();
         self::assertSame(LinkResult::Claimed, $this->linker($this->ids)->claim('acc-typed', Fake::USER));
+    }
+
+    /**
+     * REQ-RUNTIME-003: the lock store is down: the claim fails closed (Unavailable, nothing written, logged).
+     */
+    public function testAnUnreachableLockStoreFailsClosed(): void
+    {
+        $this->locks = new LockFactory(new FailingLockStore());
+        $logger      = new RecordingLogger();
+
+        self::assertSame(LinkResult::Unavailable, $this->linker($this->ids, $logger)->claim('acc-typed', Fake::USER));
+        self::assertNull($this->holder());
+        self::assertSame('lock_store', $logger->records[0]['context']['reason'] ?? null);
+    }
+
+    /**
+     * REQ-RUNTIME-003: a release that fails keeps the claim's answer and is logged.
+     */
+    public function testAFailedReleaseKeepsTheResult(): void
+    {
+        $this->locks = new LockFactory(new FailingLockStore([], ['link_pair']));
+        $logger      = new RecordingLogger();
+
+        self::assertSame(LinkResult::Claimed, $this->linker($this->ids, $logger)->claim('acc-typed', Fake::USER));
+        self::assertSame('acc-typed', $this->holder()?->accountId);
+        self::assertContains('Slack link lock could not be released; it expires after its TTL.', $logger->messages());
     }
 
     private function holder(): ?SlackLink
@@ -99,7 +127,7 @@ final class AccountLinkerConflictTest extends TestCase
         return new SlackInteraction(SlackInstallationKey::default(), AccountLinker::CONFIRM_ACTION, $data, SlackTeamId::fromString(Fake::TEAM), SlackUserId::fromString(Fake::USER), null, SlackChannelId::fromString(Fake::DM), '1.0', 'id');
     }
 
-    private function linker(SlackIdentityLinksInterface $identities): AccountLinker
+    private function linker(SlackIdentityLinksInterface $identities, ?RecordingLogger $logger = null): AccountLinker
     {
         $limiter = new RateLimiterFactory(['id' => 'l', 'policy' => 'fixed_window', 'limit' => 50, 'interval' => '1 hour'], new InMemoryStorage());
 
@@ -111,6 +139,7 @@ final class AccountLinkerConflictTest extends TestCase
             $this->clock,
             ['claim_per_account' => $limiter, 'email_lookup_per_account' => $limiter, 'confirmation_per_account' => $limiter, 'confirmation_per_target' => $limiter],
             events: $this->events,
+            logger: $logger ?? new RecordingLogger(),
             locks: $this->locks,
         );
     }
