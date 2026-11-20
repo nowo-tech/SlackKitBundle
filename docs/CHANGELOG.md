@@ -6,10 +6,12 @@ All notable changes to this project are documented here. The format follows
 ## Table of contents
 
 - [[Unreleased]](#unreleased)
+- [[1.7.0] - 2026-11-20](#170---2026-11-20)
+  - [Added](#added)
 - [[1.6.1] - 2026-11-19](#161---2026-11-19)
   - [Fixed](#fixed)
 - [[1.6.0] - 2026-11-19](#160---2026-11-19)
-  - [Added](#added)
+  - [Added](#added-1)
   - [Changed](#changed)
   - [Fixed](#fixed-1)
 - [[1.5.1] - 2026-11-17](#151---2026-11-17)
@@ -31,23 +33,27 @@ All notable changes to this project are documented here. The format follows
   - [Fixed](#fixed-2)
   - [Changed](#changed-4)
 - [[1.2.0] - 2026-11-10](#120---2026-11-10)
-  - [Added](#added-1)
+  - [Added](#added-2)
   - [Documentation](#documentation-1)
 - [[1.1.0] - 2026-11-08](#110---2026-11-08)
-  - [Added](#added-2)
+  - [Added](#added-3)
 - [[1.0.1] - 2026-11-05](#101---2026-11-05)
   - [Documentation](#documentation-2)
 - [[1.0.0] - 2026-11-05](#100---2026-11-05)
-  - [Added](#added-3)
+  - [Added](#added-4)
   - [Security (REQ-SEC-004 audit, appendix FS)](#security-req-sec-004-audit-appendix-fs)
   - [Interim decisions (aligned with symfony-beacon 1.122.1)](#interim-decisions-aligned-with-symfony-beacon-11221)
   - [Notes / deviations from contract v1.1](#notes--deviations-from-contract-v11)
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-20
+
 ### Added
 
 - `Api\IncomingWebhookClientInterface` (REQ-ARCH-001): `IncomingWebhookClient` implements it and the container aliases it (public) to the class. Hosts should type-hint the interface; the class id keeps working. No BC break.
+
+[1.7.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.7.0
 
 ## [1.6.1] - 2026-11-19
 
@@ -543,5 +549,5 @@ Decided by the owner on 2026-11-05 so that Beacon's adoption is a no-op:
   (OAuth, 1.1). VarDumper and the profiler show `[redacted]` through `SlackSecret::__debugInfo()`; there is no
   separate caster.
 
-[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.6.1...HEAD
+[Unreleased]: https://github.com/nowo-tech/SlackKitBundle/compare/v1.7.0...HEAD
 [1.0.0]: https://github.com/nowo-tech/SlackKitBundle/releases/tag/v1.0.0

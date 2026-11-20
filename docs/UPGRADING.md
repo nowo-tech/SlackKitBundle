@@ -6,6 +6,7 @@ are listed per target version.
 ## Table of contents
 
 - [Unreleased](#unreleased)
+- [To 1.7.0](#to-170)
 - [To 1.6.1](#to-161)
 - [To 1.6.0](#to-160)
 - [To 1.5.1](#to-151)
@@ -27,6 +28,14 @@ are listed per target version.
   - [Values already posted to Slack](#values-already-posted-to-slack)
 
 ## Unreleased
+
+## To 1.7.0
+
+From **1.6.1**:
+
+```bash
+composer update nowo-tech/slack-kit-bundle
+```
 
 Optional, no action needed: type-hint `Nowo\SlackKitBundle\Api\IncomingWebhookClientInterface` instead of the final
 `IncomingWebhookClient`. The class id and its service keep working.
