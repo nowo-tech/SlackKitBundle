@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "6877076f3b10cad4b30258601fc86ccb",
+    "content-hash": "bfce6a73d03599f1f63b7491fa71e35b",
     "packages": [
         {
             "name": "doctrine/collections",
@@ -1291,11 +1291,11 @@
         },
         {
             "name": "nowo-tech/slack-kit-bundle",
-            "version": "dev-main",
+            "version": "dev-chore/demo-platform-shell",
             "dist": {
                 "type": "path",
                 "url": "/var/slack-kit-bundle",
-                "reference": "57a1121417d47b131c78d12f4024082e22bbea1c"
+                "reference": "737cd44d174b41f7c84520897b1e7b8008bf70f6"
             },
             "require": {
                 "ext-json": "*",
@@ -1322,6 +1322,8 @@
                 "symfony/service-contracts": "^3.5",
                 "symfony/translation-contracts": "^3.5",
                 "symfony/validator": "^7.4 || ^8.0",
+                "twig/extra-bundle": "^3.12",
+                "twig/string-extra": "^3.12",
                 "twig/twig": "^3.8"
             },
             "require-dev": {
@@ -1339,9 +1341,11 @@
                 "symfony/browser-kit": "^7.4 || ^8.0",
                 "symfony/css-selector": "^7.4 || ^8.0",
                 "symfony/dom-crawler": "^7.4 || ^8.0",
+                "symfony/filesystem": "^7.4 || ^8.0",
                 "symfony/messenger": "^7.4 || ^8.0",
                 "symfony/notifier": "^7.4 || ^8.0",
                 "symfony/phpunit-bridge": "^7.4 || ^8.0",
+                "symfony/process": "^7.4 || ^8.0",
                 "symfony/security-bundle": "^7.4 || ^8.0",
                 "symfony/translation": "^7.4 || ^8.0",
                 "symfony/yaml": "^7.4 || ^8.0"
@@ -1462,16 +1466,16 @@
         },
         {
             "name": "nowo-tech/ui-kit-bundle",
-            "version": "v2.53.0",
+            "version": "v2.61.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/nowo-tech/UiKitBundle.git",
-                "reference": "73e4d4095e43208b2d2f2d818814faa2449d7e6e"
+                "reference": "d447ef040dfb7e52d221eb888735b9eb40a53bb8"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/nowo-tech/UiKitBundle/zipball/73e4d4095e43208b2d2f2d818814faa2449d7e6e",
-                "reference": "73e4d4095e43208b2d2f2d818814faa2449d7e6e",
+                "url": "https://api.github.com/repos/nowo-tech/UiKitBundle/zipball/d447ef040dfb7e52d221eb888735b9eb40a53bb8",
+                "reference": "d447ef040dfb7e52d221eb888735b9eb40a53bb8",
                 "shasum": ""
             },
             "require": {
@@ -1518,7 +1522,8 @@
                 "symfony/validator": "Colour validation in the optional appearance forms"
             },
             "bin": [
-                "bin/nowo-ui-token-lint"
+                "bin/nowo-ui-token-lint",
+                "bin/nowo-ui-demo-style-lint"
             ],
             "type": "symfony-bundle",
             "autoload": {
@@ -1560,8 +1565,8 @@
                 "issues": "https://github.com/nowo-tech/UiKitBundle/issues",
                 "source": "https://github.com/nowo-tech/UiKitBundle"
             },
-            "time": "2026-11-16T22:25:43+00:00",
-            "published-time": "2026-11-16T22:27:58+00:00"
+            "time": "2026-11-20T22:14:25+00:00",
+            "published-time": "2026-11-20T22:17:13+00:00"
         },
         {
             "name": "paragonie/constant_time_encoding",

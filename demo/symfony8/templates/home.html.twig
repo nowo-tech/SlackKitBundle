@@ -2,70 +2,63 @@
 
 {% block title %}Home - Slack Kit Demo{% endblock %}
 
+{% block nowo_ui_page_header %}
+    {{ include(nowo_ui_partial('page_header'), {
+        title: 'Slack Kit demo',
+        intro: 'Everything runs against an in-app fake Slack: no token, workspace or member is real.',
+    }) }}
+{% endblock %}
+
 {% block body %}
-<section class="nowo-ui-card">
-    <div class="nowo-ui-card__header"><h2>Slack Kit demo</h2></div>
-    <div class="nowo-ui-card__body">
-        <p>
-            Everything here runs against an <strong>in-app fake Slack</strong>: the bundle's Web API client talks to
-            <code class="nowo-ui-code">App\FakeSlack\FakeSlackApi</code> (the HttpClient mock), and clicks are signed with a fake signing secret
-            and sent to the bundle's real ingress (<code class="nowo-ui-code">POST /slack/interactions</code>). No token, workspace or member is real.
-        </p>
-        <ol>
-            <li><code class="nowo-ui-code">make seed</code> stores the fake bot token, signing secret and workspace <code class="nowo-ui-code">T00000000</code> in the <a href="{{ path('nowo_instance_settings_section', {section: 'slack'}) }}">Slack settings</a>.</li>
-            <li>Link the demo account below (type <code class="nowo-ui-code">U00000001</code> or use <em>Find me by e-mail</em>), then <em>Send confirmation</em>.</li>
-            <li>Click the signed <em>Confirm</em> button in the fake Slack log: the link becomes verified.</li>
-            <li>Post a demo button and click it: the <code class="nowo-ui-code">demo.ping</code> handler answers only for a verified actor.</li>
-        </ol>
+    {% embed '@NowoUiKit/demo_platform/_section.html.twig' with {title: 'How it works', kind: 'content'} %}
+        {% block section_body %}
+            <p>
+                The bundle's Web API client talks to <code class="nowo-ui-code">App\FakeSlack\FakeSlackApi</code> (the HttpClient mock), and clicks are signed with a fake signing secret
+                and sent to the bundle's real ingress (<code class="nowo-ui-code">POST /slack/interactions</code>).
+            </p>
+            <ol>
+                <li><code class="nowo-ui-code">make seed</code> stores the fake bot token, signing secret and workspace <code class="nowo-ui-code">T00000000</code> in the <a href="{{ path('nowo_instance_settings_section', {section: 'slack'}) }}">Slack settings</a>.</li>
+                <li>Link the demo account below (type <code class="nowo-ui-code">U00000001</code> or use <em>Find me by e-mail</em>), then <em>Send confirmation</em>.</li>
+                <li>Click the signed <em>Confirm</em> button in the fake Slack log: the link becomes verified.</li>
+                <li>Post a demo button and click it: the <code class="nowo-ui-code">demo.ping</code> handler answers only for a verified actor.</li>
+            </ol>
+        {% endblock %}
+    {% endembed %}
+
+    <div data-testid="demo-link-card">
+        {{ include('@NowoSlackKitBundle/account/_link.html.twig') }}
     </div>
-</section>
 
-<div data-testid="demo-link-card">
-    {{ include('@NowoSlackKitBundle/account/_link.html.twig') }}
-</div>
-
-<section class="nowo-ui-card">
-    <div class="nowo-ui-card__header"><h3>Fake Slack: buttons</h3></div>
-    <div class="nowo-ui-card__body">
-        <div class="nowo-ui-row-actions">
-            {{ form_start(post_form, {attr: {'data-testid': 'demo-post-button'}}) }}{% for child in post_form %}{{ form_row(child) }}{% endfor %}{{ form_end(post_form) }}
+    {% embed '@NowoUiKit/demo_platform/_section.html.twig' with {title: 'Fake Slack: buttons', kind: 'table', empty: buttons is empty, state_message: 'No message with buttons yet.', testid: 'demo-buttons-section'} %}
+        {% block section_actions %}
+            <div data-testid="demo-post-button">{{ form_start(post_form) }}{% for child in post_form %}{{ form_row(child) }}{% endfor %}{{ form_end(post_form) }}</div>
             {{ form_start(clear) }}{% for child in clear %}{{ form_row(child) }}{% endfor %}{{ form_end(clear) }}
-        </div>
-        {% if buttons is empty %}
-            <p class="nowo-ui-muted" data-testid="demo-no-buttons">No message with buttons yet.</p>
-        {% else %}
-            <div class="nowo-ui-table-wrap">
-                <table class="nowo-ui-table" data-testid="demo-buttons">
-                    <thead><tr><th>Channel</th><th>Button</th><th>action_id</th><th>Value (nsk1)</th><th></th></tr></thead>
-                    <tbody>
-                    {% for button in buttons %}
-                        <tr data-action="{{ button.action_id }}">
-                            <td><code class="nowo-ui-code">{{ button.channel }}</code></td>
-                            <td>{{ button.text }}</td>
-                            <td><code class="nowo-ui-code">{{ button.action_id }}</code></td>
-                            <td><code class="nowo-ui-code">{{ button.value|u.truncate(48, '…') }}</code></td>
-                            <td>{{ form_start(button.form) }}{% for child in button.form %}{{ form_row(child) }}{% endfor %}{{ form_end(button.form) }}</td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% endif %}
-    </div>
-</section>
+        {% endblock %}
+        {% block section_body %}
+            <table class="nowo-ui-data-table" data-testid="demo-buttons">
+                <thead><tr><th>Channel</th><th>Button</th><th>action_id</th><th>Value (nsk1)</th><th>Actions</th></tr></thead>
+                <tbody>
+                {% for button in buttons %}
+                    <tr data-action="{{ button.action_id }}">
+                        <td><code class="nowo-ui-code">{{ button.channel }}</code></td>
+                        <td>{{ button.text }}</td>
+                        <td><code class="nowo-ui-code">{{ button.action_id }}</code></td>
+                        <td class="nowo-ui-cell--wrap"><code class="nowo-ui-code">{{ button.value|u.truncate(48, '…') }}</code></td>
+                        <td>{{ form_start(button.form) }}{% for child in button.form %}{{ form_row(child) }}{% endfor %}{{ form_end(button.form) }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% endblock %}
+    {% endembed %}
 
-<section class="nowo-ui-card">
-    <div class="nowo-ui-card__header"><h3>Fake Slack: Web API calls</h3></div>
-    <div class="nowo-ui-card__body">
-        {% if calls is empty %}
-            <p class="nowo-ui-muted">No call yet.</p>
-        {% else %}
+    {% embed '@NowoUiKit/demo_platform/_section.html.twig' with {title: 'Fake Slack: Web API calls', kind: 'list', empty: calls is empty, state_message: 'No call yet.'} %}
+        {% block section_body %}
             <ul class="nowo-ui-list" data-testid="demo-calls">
                 {% for call in calls %}
                     <li class="nowo-ui-list-item"><code class="nowo-ui-code">{{ call.method }}</code> {{ call.body.channel ?? call.body.users ?? call.body.email ?? '' }}</li>
                 {% endfor %}
             </ul>
-        {% endif %}
-    </div>
-</section>
+        {% endblock %}
+    {% endembed %}
 {% endblock %}
