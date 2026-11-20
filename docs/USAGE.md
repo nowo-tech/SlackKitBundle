@@ -87,9 +87,10 @@ remembered, calls to the same method of the same installation fail fast without 
 ### Incoming webhooks
 
 ```php
-use Nowo\SlackKitBundle\Api\IncomingWebhookClient;
+use Nowo\SlackKitBundle\Api\IncomingWebhookClientInterface;
 use Nowo\SlackKitBundle\Security\SlackSecret;
 
+// $webhooks is an IncomingWebhookClientInterface (type-hint the interface, not the final class).
 $webhooks->post(SlackSecret::webhookUrl($destination->webhookUrl()), $message);
 ```
 
@@ -811,7 +812,7 @@ final readonly class ApproveFromSlack implements SlackActionHandlerInterface
 
 **Known limitations**
 
-- `IncomingWebhookClient` is a final class without an interface: keep it inside your infrastructure adapters.
+- `IncomingWebhookClient` is final: type-hint `IncomingWebhookClientInterface` (since 1.7; the class id keeps working).
   (`ButtonValueCodecInterface` and `AccountLinkerInterface` cover the codec and the linker since 1.2.)
 - `SlackEventReceivedEvent::$event` and `SlackInteractionReceivedEvent::$payload` are raw Slack arrays; parse them in
   the listener, not in the domain.

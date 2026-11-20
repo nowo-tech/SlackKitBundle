@@ -7,6 +7,7 @@ namespace Nowo\SlackKitBundle\Tests\Unit\DependencyInjection;
 use LogicException;
 use Nowo\InstanceSettingsBundle\Settings\InstanceSettingsInterface;
 use Nowo\SlackKitBundle\Api\IncomingWebhookClient;
+use Nowo\SlackKitBundle\Api\IncomingWebhookClientInterface;
 use Nowo\SlackKitBundle\Controller\AccountLinkController;
 use Nowo\SlackKitBundle\Controller\TestConnectionController;
 use Nowo\SlackKitBundle\Credentials\InMemoryInstallationStore;
@@ -185,6 +186,14 @@ final class ExtensionTest extends TestCase
 
         $fromEnv = $this->load(['interactions' => ['legacy_value_key' => 'a', 'legacy_until' => '%env(SLACK_LEGACY_UNTIL)%', 'legacy_action_map' => ['resolve' => 'beacon.issue.resolve']]]);
         self::assertTrue($fromEnv->hasDefinition(LegacyValuePolicy::class), 'legacy_until may come from SLACK_LEGACY_UNTIL');
+    }
+
+    public function testIncomingWebhookClientInterfaceAlias(): void
+    {
+        $container = $this->load([]);
+        self::assertSame(IncomingWebhookClient::class, (string) $container->getAlias(IncomingWebhookClientInterface::class));
+        self::assertTrue($container->getAlias(IncomingWebhookClientInterface::class)->isPublic());
+        self::assertTrue($container->getDefinition(IncomingWebhookClient::class)->isPublic(), 'the class id keeps working');
     }
 
     public function testHardenedWiring(): void

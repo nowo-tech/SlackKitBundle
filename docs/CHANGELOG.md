@@ -45,6 +45,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `Api\IncomingWebhookClientInterface` (REQ-ARCH-001): `IncomingWebhookClient` implements it and the container aliases it (public) to the class. Hosts should type-hint the interface; the class id keeps working. No BC break.
+
 ## [1.6.1] - 2026-11-19
 
 ### Fixed
