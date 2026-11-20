@@ -28,6 +28,9 @@ are listed per target version.
 
 ## Unreleased
 
+Optional, no action needed: type-hint `Nowo\SlackKitBundle\Api\IncomingWebhookClientInterface` instead of the final
+`IncomingWebhookClient`. The class id and its service keep working.
+
 ## To 1.6.1
 
 From **1.6.0**:

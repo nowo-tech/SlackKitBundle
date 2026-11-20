@@ -14,6 +14,7 @@ use Nowo\InstanceSettingsBundle\Settings\InstanceSettingsInterface;
 use Nowo\SlackKitBundle\Api\ApiPolicy;
 use Nowo\SlackKitBundle\Api\ClientMemory;
 use Nowo\SlackKitBundle\Api\IncomingWebhookClient;
+use Nowo\SlackKitBundle\Api\IncomingWebhookClientInterface;
 use Nowo\SlackKitBundle\Api\ResponseUrlClient;
 use Nowo\SlackKitBundle\Api\ResponseUrlClientInterface;
 use Nowo\SlackKitBundle\Api\SlackApiClient;
@@ -382,6 +383,7 @@ final class NowoSlackKitExtension extends Extension implements PrependExtensionI
             new Reference(self::WEBHOOK_HTTP_CLIENT),
             new Reference(ApiPolicy::class),
         ]))->setPublic(true));
+        $container->setAlias(IncomingWebhookClientInterface::class, IncomingWebhookClient::class)->setPublic(true);
         // Spec 237 T000c: the response_url is a credential too (same logger-free client).
         $container->setDefinition(ResponseUrlClient::class, new Definition(ResponseUrlClient::class, [
             new Reference(self::WEBHOOK_HTTP_CLIENT),

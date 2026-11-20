@@ -6,6 +6,7 @@ namespace Nowo\SlackKitBundle\Tests\Unit\Api;
 
 use Nowo\SlackKitBundle\Api\ApiPolicy;
 use Nowo\SlackKitBundle\Api\IncomingWebhookClient;
+use Nowo\SlackKitBundle\Api\IncomingWebhookClientInterface;
 use Nowo\SlackKitBundle\Api\RedactedTransportException;
 use Nowo\SlackKitBundle\Api\SlackApiException;
 use Nowo\SlackKitBundle\Api\SlackMessage;
@@ -32,6 +33,13 @@ final class IncomingWebhookClientTest extends TestCase
         self::assertSame(Fake::WEBHOOK, $seen[0]);
         self::assertSame(0, $seen[1]);
         self::assertStringContainsString('"text":"hi"', (string) $seen[2]);
+    }
+
+    public function testImplementsInterface(): void
+    {
+        self::assertContains(IncomingWebhookClientInterface::class, class_implements(IncomingWebhookClient::class));
+        $client = new IncomingWebhookClient(new MockHttpClient(new MockResponse('ok')), new ApiPolicy());
+        $client->post(SlackSecret::webhookUrl(Fake::WEBHOOK), SlackMessage::plain('hi'));
     }
 
     public function testErrors(): void
