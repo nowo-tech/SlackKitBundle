@@ -2,6 +2,8 @@
 # framework, no CDN); the demo shell is the admin layout of the instance settings pages.
 nowo_ui_kit:
     css_framework: custom
+    base_stylesheet: true
     icon_set: none
     layouts:
         admin: 'base.html.twig'
+        guest: 'base.html.twig'
