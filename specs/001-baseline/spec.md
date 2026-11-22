@@ -92,7 +92,7 @@ shared lock store (a local store fails the build outside debug and test).
 | FR-DI-002 | Strict configuration tree (contract §14) and build-time refusals (literal secrets, env booleans, legacy without cutoff, linking without services, async without Messenger) |
 | FR-DI-003 | Route loader `nowo_slack_kit` for ingress, *Test connection* and account routes |
 | FR-API-001 | Web API client rules of contract §4 |
-| FR-API-002 | `IncomingWebhookClientInterface` (1.7.0, REQ-ARCH-001): the port of the incoming-webhook poster (`https://hooks.slack.com/services/…` only); the final `IncomingWebhookClient` is its default implementation and hosts type-hint the interface so they can substitute a test double |
+| FR-API-004 | `IncomingWebhookClientInterface` (1.7.0, REQ-ARCH-001): the port of the incoming-webhook poster (`https://hooks.slack.com/services/…` only); the final `IncomingWebhookClient` is its default implementation and hosts type-hint the interface so they can substitute a test double |
 | FR-API-002 | Validated Slack id value objects (`U/W`, `T/E`, `C/D/G`) |
 | FR-API-003 | Rate-limit memory and the opt-in Messenger retry middleware |
 | FR-SEC-001 | `SlackSecret` value objects and `SecretRedactor` (contract §7.3, §12) |

@@ -24,7 +24,7 @@
 | `src/Api/ClientMemory.php` | Web API client | FR-API-001 |
 | `src/Api/EmailLookupDisabledException.php` | Web API client | FR-API-001 |
 | `src/Api/IncomingWebhookClient.php` | Web API client | FR-API-001 |
-| `src/Api/IncomingWebhookClientInterface.php` | Web API client: port of the incoming-webhook poster (`https://hooks.slack.com/services/…` only); hosts type-hint it and substitute a test double (REQ-ARCH-001, 1.7.0) | FR-API-001, FR-API-002 |
+| `src/Api/IncomingWebhookClientInterface.php` | Web API client: port of the incoming-webhook poster (`https://hooks.slack.com/services/…` only); hosts type-hint it and substitute a test double (REQ-ARCH-001, 1.7.0) | FR-API-001, FR-API-004 |
 | `src/Api/PostedMessage.php` | Web API client | FR-API-001 |
 | `src/Api/RecoverableSlackException.php` | Web API client | FR-API-001 |
 | `src/Api/RedactedTransportException.php` | Web API client | FR-API-001 |
