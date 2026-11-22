@@ -1,7 +1,7 @@
 # Code inventory — 001-baseline
 
-**Last audited**: 2026-11-16 (sweep: 2026-11-05 baseline + later sources) (SEC-004 FS fixes)
-**Scope**: every production file under `src/` (94 files, `find src -type f | wc -l`). Tests, demo and generated caches are out of scope.
+**Last audited**: 2026-11-22 (sweep: 2026-11-05 baseline + later sources; `IncomingWebhookClientInterface`, 1.7.0)
+**Scope**: every production file under `src/` (136 files, `find src -type f | wc -l`). Tests, demo and generated caches are out of scope.
 
 ## Bundle / DI
 
@@ -24,6 +24,7 @@
 | `src/Api/ClientMemory.php` | Web API client | FR-API-001 |
 | `src/Api/EmailLookupDisabledException.php` | Web API client | FR-API-001 |
 | `src/Api/IncomingWebhookClient.php` | Web API client | FR-API-001 |
+| `src/Api/IncomingWebhookClientInterface.php` | Web API client: port of the incoming-webhook poster (`https://hooks.slack.com/services/…` only); hosts type-hint it and substitute a test double (REQ-ARCH-001, 1.7.0) | FR-API-001, FR-API-002 |
 | `src/Api/PostedMessage.php` | Web API client | FR-API-001 |
 | `src/Api/RecoverableSlackException.php` | Web API client | FR-API-001 |
 | `src/Api/RedactedTransportException.php` | Web API client | FR-API-001 |
