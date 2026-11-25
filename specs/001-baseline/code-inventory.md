@@ -1,6 +1,6 @@
 # Code inventory — 001-baseline
 
-**Last audited**: 2026-11-22 (sweep: 2026-11-05 baseline + later sources; `IncomingWebhookClientInterface`, 1.7.0)
+**Last audited**: 2026-11-27 (sweep: 2026-11-05 baseline + later sources; `IncomingWebhookClientInterface`, 1.7.0)
 **Scope**: every production file under `src/` (136 files, `find src -type f | wc -l`). Tests, demo and generated caches are out of scope.
 
 ## Bundle / DI
@@ -215,3 +215,26 @@ These 41 `src/` files were added by releases after the last review. Each row map
 | `src/Test/SlackIdentityLinksContractTestCase.php` | The contract of an identity store with several identities per account (1.4, spec 237 FR-010): extend it in your test... | FR-CRED-002 |
 | `src/Test/SlackInstallationBindingStoreContractTestCase.php` | The binding store contract (spec 237 FR-001, `installations.binding_store`): extend it in your test suite and return... | FR-CRED-002 |
 | `src/Test/SlackMultiInstallationStoreContractTestCase.php` | The contract of an installation store that keeps several workspaces (spec 237: "Add to Slack" and own apps). | FR-CRED-002 |
+
+## Coverage summary
+
+| Category | Files | Mapped |
+| --- | ---: | ---: |
+| Bundle / DI | 7 | 7 |
+| Web API client | 16 | 16 |
+| Identifiers | 4 | 4 |
+| Rate limits and Messenger | 1 | 1 |
+| Secrets and redaction | 2 | 2 |
+| Credentials and stores | 7 | 7 |
+| Signed ingress | 8 | 8 |
+| Interactions router and nsk1 values | 12 | 12 |
+| Account linking | 6 | 6 |
+| Block Kit builder | 3 | 3 |
+| Events | 11 | 11 |
+| Notifier transport | 3 | 3 |
+| UI and controllers | 8 | 8 |
+| Translations | 7 | 7 |
+| Sources added after the last baseline review (sweep 2026-11-16) | 41 | 41 |
+| **Total production sources** | **136** | **136** |
+
+Audit command: `git ls-files src | wc -l` → **136** (2026-11-27, 1.7.0); every tracked file under `src/` is a row of this inventory (checked path by path, no stale rows).
