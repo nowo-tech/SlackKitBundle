@@ -117,6 +117,7 @@ Areas introduced by releases after the baseline review; each requirement names t
 
 ## Success criteria
 
+- **SC-001** 100 % of production files mapped: **136/136** rows in [`code-inventory.md`](code-inventory.md) (`git ls-files src | wc -l`, 2026-11-27, 1.7.0).
 - PHPUnit line coverage 100 % (gate 100 %), PHPStan level 8 with empty `ignoreErrors`, igor clean, Rector clean.
 - The §6.5.9 vectors match Beacon 1.122.1 byte for byte.
 - The demo (FrankenPHP worker, fake Slack) passes the Playwright happy path.
