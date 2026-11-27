@@ -147,7 +147,7 @@ Slack app. More in [docs/USAGE.md](docs/USAGE.md).
 
 ## Requirements
 
-- PHP **8.2+** (`>=8.2 <8.6`; Symfony 8.x requires PHP 8.4+)
+- PHP **8.2+** (`>=8.2 <8.7`; Symfony 8.x requires PHP 8.4+)
 - Symfony **7.4**, **8.0** or **8.1** (FrameworkBundle, HttpClient, Lock, RateLimiter, Routing, Form, Validator,
   Security CSRF, Clock)
 - In production, an **expiring shared lock store** for the replay memory, ideally a dedicated

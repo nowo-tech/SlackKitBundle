@@ -15,7 +15,7 @@
 
 ## Requirements
 
-- PHP `>=8.2 <8.6`, Symfony `^7.4 || ^8.0` (Symfony 8 needs PHP 8.4+)
+- PHP `>=8.2 <8.7`, Symfony `^7.4 || ^8.0` (Symfony 8 needs PHP 8.4+)
 - `nowo-tech/ui-kit-bundle` ^2.27 and `nowo-tech/form-kit-bundle` ^2.17 (installed as dependencies)
 - For the default credential store and the admin section: `nowo-tech/instance-settings-bundle` (set it up first:
   Doctrine table, encryption key, admin UI — see its installation guide)
