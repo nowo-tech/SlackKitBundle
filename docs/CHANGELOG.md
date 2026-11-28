@@ -49,6 +49,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- PHP 8.6: `composer.json` allows PHP below 8.7 (was below 8.6). CI adds a forward-compatibility workflow with a
+  PHP 8.6 cell and a Symfony 8.2 cell (both stable, no allowed failures).
 - demo: the demo runs inside UiKit's demo platform shell (`@NowoUiKit/demo_platform/layout.html.twig`, UiKit ^2.60): shared top bar, aside navigation and section cards, no demo masthead markup; the Web Debug Toolbar and the CDN hot-reload scripts are off in the demo and its README screenshots. Demo only, no release.
 
 ## [1.7.0] - 2026-11-20
